@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SNES16 · Enviar ROMs</title>
+<style>
+  :root { --bg:#cdcbd4; --card:#f7f6fa; --line:#c9c6d2; --text:#26232e; --dim:#6b6777; --accent:#5c4a9e; --lilac:#b8abeb; --ok:#3f9e6a; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif; color:var(--text);
+         background-color:#cdcbd4;
+         background-image:repeating-linear-gradient(#e0dfe6 0 1px, #cdcbd4 1px 8px, #b3b0bb 8px 9px);
+         background-size:100% 9px; }
+  header { position:relative; overflow:hidden; margin-bottom:22px; }
+  header::after { content:""; position:absolute; right:-10px; top:0; width:150px; height:100%;
+                  background:linear-gradient(transparent 0 22%, #5c4a9e 22% 38%, transparent 38% 44%, #b8abeb 44% 56%, transparent 56% 62%, #9e9aa8 62% 70%, transparent 70%); }
+  main { max-width:760px; margin:0 auto; padding:32px 20px 60px; }
+  h1 { margin:0; font:italic 900 60px/1.05 "Avenir Next", "Helvetica Neue", Arial, sans-serif; letter-spacing:-1px;
+       background:linear-gradient(#9e8ce6 0%, #6652b3 55%, #45357f 100%);
+       -webkit-background-clip:text; background-clip:text; color:transparent;
+       filter:drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff) drop-shadow(0 3px 3px rgba(40,30,70,.45)); }
+  p.sub { margin:4px 0 0; color:var(--accent); font-weight:700; letter-spacing:1.5px; font-size:13px; text-transform:uppercase; }
+  #drop { border:2px dashed #8f8a9c; border-radius:14px; padding:40px 20px; text-align:center; background:var(--card); cursor:pointer; transition:.15s;
+          box-shadow:0 2px 6px rgba(0,0,0,.15); }
+  #drop.over { border-color:var(--accent); background:#ece8fb; }
+  #drop strong { display:block; font:italic 900 24px "Avenir Next", "Helvetica Neue", Arial, sans-serif; margin-bottom:6px; color:var(--accent); text-transform:uppercase; }
+  #drop small { color:var(--dim); }
+  #queue { margin:16px 0 0; }
+  .job { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); }
+  .job .n { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bar { width:160px; height:6px; background:var(--line); border-radius:3px; overflow:hidden; }
+  .bar i { display:block; height:100%; width:0; background:var(--accent); }
+  .job.done .bar i { background:var(--ok); }
+  .job .s { width:70px; text-align:right; color:var(--dim); font-size:13px; }
+  h2 { margin:32px 0 8px; font-size:13px; letter-spacing:1.5px; text-transform:uppercase; color:var(--accent); }
+  table { background:var(--card); border-radius:10px; box-shadow:0 2px 6px rgba(0,0,0,.12); }
+  table { width:100%; border-collapse:collapse; }
+  td { padding:9px 4px; border-bottom:1px solid var(--line); }
+  td.size { color:var(--dim); text-align:right; width:90px; font-variant-numeric:tabular-nums; }
+  td.act { width:70px; text-align:right; }
+  .tag { font-size:11px; padding:2px 6px; border-radius:4px; background:var(--lilac); color:#2d2450; margin-left:6px; }
+  button { background:none; border:1px solid var(--line); color:var(--dim); border-radius:6px; padding:3px 9px; cursor:pointer; font:inherit; font-size:13px; }
+  button:hover { color:var(--accent); border-color:var(--accent); }
+  .empty { color:var(--dim); padding:12px 4px; }
+  .tip { margin-top:28px; padding:14px 16px; background:var(--card); border-left:4px solid var(--accent); border-radius:8px; color:var(--dim); font-size:14px; }
+  .tip b { color:var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>SNES16</h1>
+    <p class="sub">Arraste as ROMs e os patches para cá · direto para o iPad</p>
+  </header>
+
+  <div id="drop">
+    <strong>Solte os arquivos aqui</strong>
+    <small>ou clique para escolher · .sfc .smc .swc .fig · patches .ips .bps</small>
+    <input id="pick" type="file" multiple hidden>
+  </div>
+  <div id="queue"></div>
+
+  <h2>No iPad</h2>
+  <table><tbody id="files"><tr><td class="empty">Carregando…</td></tr></tbody></table>
+
+  <div class="tip">
+    <b>Patch automático:</b> dê ao patch o mesmo nome da ROM (ex.: <i>Meu Jogo.sfc</i> + <i>Meu Jogo.bps</i>).
+    O SNES16 aplica o patch ao abrir o jogo, sem alterar a ROM original.
+  </div>
+</main>
+<script>
+const ACCEPT = ["sfc","smc","swc","fig","gd3","gd7","dx2","bsx","ips","bps"];
+const drop = document.getElementById("drop"), pick = document.getElementById("pick");
+const queueEl = document.getElementById("queue"), filesEl = document.getElementById("files");
+
+function fmtSize(n) {
+  if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
+  if (n >= 1024) return Math.round(n / 1024) + " KB";
+  return n + " B";
+}
+function ext(name) { const i = name.lastIndexOf("."); return i < 0 ? "" : name.slice(i + 1).toLowerCase(); }
+function esc(s) { return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/list", {cache: "no-store"});
+    const data = await r.json();
+    const names = new Set(data.files.map(f => f.name.replace(/\.[^.]+$/, "").toLowerCase() + "|" + ext(f.name)));
+    if (!data.files.length) { filesEl.innerHTML = '<tr><td class="empty">Nenhum arquivo ainda.</td></tr>'; return; }
+    filesEl.innerHTML = "";
+    for (const f of data.files) {
+      const e = ext(f.name), base = f.name.replace(/\.[^.]+$/, "").toLowerCase();
+      let tag = "";
+      if (e === "ips" || e === "bps") tag = '<span class="tag">patch</span>';
+      else if (names.has(base + "|ips") || names.has(base + "|bps")) tag = '<span class="tag">com patch</span>';
+      const tr = document.createElement("tr");
+      tr.innerHTML = `<td>${esc(f.name)}${tag}</td><td class="size">${fmtSize(f.size)}</td><td class="act"><button>Apagar</button></td>`;
+      tr.querySelector("button").onclick = async () => {
+        if (!confirm(`Apagar ${f.name} do iPad?`)) return;
+        await fetch("/api/delete?name=" + encodeURIComponent(f.name), {method: "POST"});
+        refresh();
+      };
+      filesEl.appendChild(tr);
+    }
+  } catch (e) {
+    filesEl.innerHTML = '<tr><td class="empty">Sem conexão com o iPad. A tela "Enviar ROMs" está aberta?</td></tr>';
+  }
+}
+
+function upload(file) {
+  return new Promise(resolve => {
+    const row = document.createElement("div");
+    row.className = "job";
+    row.innerHTML = `<div class="n">${esc(file.name)}</div><div class="bar"><i></i></div><div class="s">0%</div>`;
+    queueEl.prepend(row);
+    const bar = row.querySelector("i"), status = row.querySelector(".s");
+    if (!ACCEPT.includes(ext(file.name))) { status.textContent = "ignorado"; resolve(); return; }
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", "/api/upload?name=" + encodeURIComponent(file.name));
+    xhr.upload.onprogress = e => { if (e.lengthComputable) { const p = Math.round(e.loaded / e.total * 100); bar.style.width = p + "%"; status.textContent = p + "%"; } };
+    xhr.onload = () => {
+      let ok = false, msg = "erro";
+      try { const r = JSON.parse(xhr.responseText); ok = r.ok; msg = r.error || msg; } catch (e) {}
+      if (ok) { row.classList.add("done"); bar.style.width = "100%"; status.textContent = "enviado"; }
+      else { status.textContent = msg; status.title = msg; }
+      resolve();
+    };
+    xhr.onerror = () => { status.textContent = "falhou"; resolve(); };
+    xhr.send(file);
+  });
+}
+
+async function sendAll(list) {
+  for (const f of list) await upload(f);   // um por vez: o iPad 3 agradece
+  refresh();
+}
+
+drop.onclick = () => pick.click();
+pick.onchange = () => { sendAll([...pick.files]); pick.value = ""; };
+["dragenter", "dragover"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", e => sendAll([...e.dataTransfer.files]));
+document.addEventListener("dragover", e => e.preventDefault());
+document.addEventListener("drop", e => e.preventDefault());
+refresh();
+</script>
+</body>
+</html>
