@@ -6,19 +6,19 @@
 
 NSString *RFActionName(RFAction action) {
     switch (action) {
-        case RFActionUp: return @"Cima";
-        case RFActionDown: return @"Baixo";
-        case RFActionLeft: return @"Esquerda";
-        case RFActionRight: return @"Direita";
+        case RFActionUp: return @"Up";
+        case RFActionDown: return @"Down";
+        case RFActionLeft: return @"Left";
+        case RFActionRight: return @"Right";
         case RFActionA: return @"A";
         case RFActionB: return @"B";
         case RFActionX: return @"X";
         case RFActionY: return @"Y";
         case RFActionStart: return @"Start";
-        case RFActionL: return @"L (ombro esquerdo)";
-        case RFActionR: return @"R (ombro direito)";
+        case RFActionL: return @"L (left shoulder)";
+        case RFActionR: return @"R (right shoulder)";
         case RFActionSelect: return @"Select";
-        case RFActionMenu: return @"Abrir o menu do emulador (opcional)";
+        case RFActionMenu: return @"Open the emulator menu (optional)";
         default: return @"?";
     }
 }
@@ -109,7 +109,7 @@ static int rf_add(bd_addr_t a, uint8_t psrm, uint16_t clock, uint32_t cod) {
         i = gDeviceCount++;
         memset(&gDevices[i], 0, sizeof(RFDevice));
         BD_ADDR_COPY(gDevices[i].addr, a);
-        [[RFBluetooth shared] log:[NSString stringWithFormat:@"Encontrado %@ (classe 0x%06X)", rf_addr(a), cod]];
+        [[RFBluetooth shared] log:[NSString stringWithFormat:@"Found %@ (class 0x%06X)", rf_addr(a), cod]];
     }
     gDevices[i].psrm = psrm;
     gDevices[i].clock = clock;
@@ -141,7 +141,7 @@ static void rf_next_name(void) {
 
 - (instancetype)init {
     if ((self = [super init])) {
-        _status = @"Bluetooth desligado";
+        _status = @"Bluetooth off";
     }
     return self;
 }
@@ -241,7 +241,7 @@ static void rf_main(dispatch_block_t block) {
 }
 
 - (void)setStatusText:(NSString *)text {
-    if (![text isEqualToString:self.status]) [self log:[@"Estado: " stringByAppendingString:text]];
+    if (![text isEqualToString:self.status]) [self log:[@"Status: " stringByAppendingString:text]];
     self.status = text;
     [self changed];
 }
@@ -251,16 +251,16 @@ static void rf_main(dispatch_block_t block) {
 - (void)bt_start {
     if (self.started) return;
     self.started = YES;
-    [self log:@"---- SNES16 iniciado ----"];
+    [self log:@"---- SNES16 started ----"];
     run_loop_init(RUN_LOOP_COCOA);
     if (bt_open()) {
         self.available = NO;
-        [self setStatusText:@"BTstack indisponível (o app precisa estar em /Applications)"];
+        [self setStatusText:@"BTstack unavailable (the app must be installed in /Applications)"];
         return;
     }
     self.available = YES;
     bt_register_packet_handler(rf_bt_handler);
-    [self setStatusText:@"Ligando o Bluetooth..."];
+    [self setStatusText:@"Turning Bluetooth on..."];
     bt_send_cmd(&btstack_set_power_mode, HCI_POWER_ON);
     [self performSelector:@selector(checkReady) withObject:nil afterDelay:8.0];
 }
@@ -277,8 +277,8 @@ static void rf_main(dispatch_block_t block) {
 - (void)checkReady {
     if (self.ready || !self.available) return;
     // No iPad 3 o Wi-Fi e o Bluetooth dividem o mesmo chip: com o Wi-Fi desligado o BTstack não inicializa
-    [self log:@"BTstack não ficou pronto em 8 s"];
-    [self setStatusText:@"O Bluetooth não iniciou. Deixe o Wi-Fi do iPad LIGADO, feche e abra o app de novo."];
+    [self log:@"BTstack was not ready after 8 s"];
+    [self setStatusText:@"Bluetooth did not start. Keep the iPad's Wi-Fi ON, then close and reopen the app."];
 }
 
 - (void)btReady {
@@ -290,11 +290,11 @@ static void rf_main(dispatch_block_t block) {
     if (saved.length && [self parseAddress:saved into:gTarget]) {
         gHasTarget = 1;
         [self loadMappingFor:saved];
-        [self setStatusText:@"Bluetooth ligado. Ligue o controle para reconectar."];
+        [self setStatusText:@"Bluetooth on. Turn on your controller to reconnect."];
         // Tenta conectar ao controle salvo (funciona se ele estiver ligado)
         bt_send_cmd(&l2cap_create_channel, gTarget, PSM_HID_CONTROL);
     } else {
-        [self setStatusText:@"Bluetooth ligado. Nenhum controle pareado."];
+        [self setStatusText:@"Bluetooth on. No controller paired."];
     }
 }
 
@@ -314,18 +314,18 @@ static void rf_main(dispatch_block_t block) {
 - (void)bt_scan {
     if (!self.available) return;
     if (!self.ready) {
-        [self setStatusText:@"O Bluetooth ainda não está pronto. Deixe o Wi-Fi do iPad LIGADO, feche e abra o app de novo."];
+        [self setStatusText:@"Bluetooth is not ready yet. Keep the iPad's Wi-Fi ON, then close and reopen the app."];
         return;
     }
     if (gInquiry) {
         bt_send_cmd(&hci_inquiry_cancel);
         gInquiry = 0;
-        [self setStatusText:@"Busca cancelada"];
+        [self setStatusText:@"Search cancelled"];
         return;
     }
     gInquiry = 1;
-    [self log:@"Busca iniciada (~12 s)"];
-    [self setStatusText:@"Procurando... coloque o controle em modo de pareamento"];
+    [self log:@"Search started (~12 s)"];
+    [self setStatusText:@"Searching... put your controller in pairing mode"];
     bt_send_cmd(&hci_inquiry, HCI_INQUIRY_LAP, 10, 0);
 }
 
@@ -336,7 +336,7 @@ static void rf_main(dispatch_block_t block) {
 - (NSString *)deviceTitleAtIndex:(NSInteger)index {
     if (index < 0 || index >= gDeviceCount) return @"";
     RFDevice *d = &gDevices[index];
-    NSString *name = d->name[0] ? [NSString stringWithUTF8String:d->name] : @"(sem nome)";
+    NSString *name = d->name[0] ? [NSString stringWithUTF8String:d->name] : @"(no name)";
     return [NSString stringWithFormat:@"%@  ·  %@", name, rf_addr(d->addr)];
 }
 
@@ -349,8 +349,8 @@ static void rf_main(dispatch_block_t block) {
     BD_ADDR_COPY(gTarget, gDevices[index].addr);
     gHasTarget = 1;
     gControlCid = gInterruptCid = 0;
-    [self log:[NSString stringWithFormat:@"Conectando a %@", rf_addr(gTarget)]];
-    [self setStatusText:@"Conectando..."];
+    [self log:[NSString stringWithFormat:@"Connecting to %@", rf_addr(gTarget)]];
+    [self setStatusText:@"Connecting..."];
     bt_send_cmd(&l2cap_create_channel, gTarget, PSM_HID_CONTROL);
 }
 
@@ -367,7 +367,7 @@ static void rf_main(dispatch_block_t block) {
     memset(gMap, 0, sizeof(gMap));
     gHasTarget = 0;
     [self disconnect];
-    [self setStatusText:@"Controle esquecido"];
+    [self setStatusText:@"Controller forgotten"];
 }
 
 - (void)onConnectedTo:(bd_addr_t)addr {
@@ -381,13 +381,13 @@ static void rf_main(dispatch_block_t block) {
     [[NSUserDefaults standardUserDefaults] setObject:a forKey:@"RFControllerAddress"];
     [[NSUserDefaults standardUserDefaults] synchronize];
     [self loadMappingFor:a];
-    [self setStatusText:[NSString stringWithFormat:@"Conectado: %@", name]];
+    [self setStatusText:[NSString stringWithFormat:@"Connected: %@", name]];
 }
 
 - (void)onDisconnected {
     self.connected = NO;
     rf_pad_mask = 0;
-    [self setStatusText:@"Controle desconectado"];
+    [self setStatusText:@"Controller disconnected"];
 }
 
 #pragma mark Mapeamento
@@ -412,8 +412,8 @@ static void rf_main(dispatch_block_t block) {
 
 - (void)loadMappingFor:(NSString *)address {
     memset(gMap, 0, sizeof(gMap));
-    [self log:[NSString stringWithFormat:@"Carregando mapeamento de %@: %@", address,
-               [[NSUserDefaults standardUserDefaults] arrayForKey:[@"RFMap-" stringByAppendingString:address]] ? @"encontrado" : @"nenhum"]];
+    [self log:[NSString stringWithFormat:@"Loading button map for %@: %@", address,
+               [[NSUserDefaults standardUserDefaults] arrayForKey:[@"RFMap-" stringByAppendingString:address]] ? @"found" : @"none"]];
     NSArray *arr = [[NSUserDefaults standardUserDefaults] arrayForKey:[@"RFMap-" stringByAppendingString:address]];
     for (NSInteger i = 0; i < (NSInteger)arr.count && i < RFActionCount; i++) {
         NSArray *m = arr[i];
@@ -428,7 +428,7 @@ static void rf_main(dispatch_block_t block) {
 
 - (void)bt_startCalibration {
     if (!self.connected) return;
-    [self log:[NSString stringWithFormat:@"Configuração iniciada; repouso = %@", gLastLen ? rf_hex(gLast, gLastLen) : @"(sem dados)"]];
+    [self log:[NSString stringWithFormat:@"Setup started; idle = %@", gLastLen ? rf_hex(gLast, gLastLen) : @"(no data)"]];
     memset(gMap, 0, sizeof(gMap));
     if (gLastLen) {
         memcpy(gBaseline, gLast, gLastLen);
@@ -456,11 +456,11 @@ static void rf_main(dispatch_block_t block) {
     if ([self hasMapping]) {
         // Direcional, A, B, C e Start já foram aprendidos: guarda e pula os opcionais
         [self saveMapping];
-        [self log:@"Configuração concluída (opcionais pulados)"];
+        [self log:@"Setup finished (remaining buttons skipped)"];
     } else {
         NSString *a = [[NSUserDefaults standardUserDefaults] stringForKey:@"RFControllerAddress"];
         if (a) [self loadMappingFor:a];
-        [self log:@"Configuração cancelada"];
+        [self log:@"Setup cancelled"];
     }
     [self changed];
 }
@@ -472,7 +472,7 @@ static void rf_main(dispatch_block_t block) {
     if (next >= RFActionCount) {
         self.calibrating = NO;
         [self saveMapping];
-        [self log:@"Mapeamento salvo"];
+        [self log:@"Button map saved"];
     } else {
         self.calibratingAction = next;
     }
@@ -534,7 +534,7 @@ static int rf_score(const uint8_t *r, int len) {
         }
         if (m.kind == RFMapHat) {
             for (int a = RFActionUp; a <= RFActionRight; a++) gMap[a] = m;
-            [self log:[NSString stringWithFormat:@"Direcional (hat) no byte %d", m.byteIndex]];
+            [self log:[NSString stringWithFormat:@"D-pad (hat) at byte %d", m.byteIndex]];
             gWaitRelease = rf_differs(gLast, gLastLen);
             [self advanceCalibration];
             return;
@@ -569,7 +569,7 @@ static int rf_score(const uint8_t *r, int len) {
     }
     if (m.kind == RFMapNone) return;   // ainda não deu para identificar; espera mais dados
     gMap[action] = m;
-    [self log:[NSString stringWithFormat:@"%@ → tipo %d, byte %d, máscara %02X", RFActionName(action), m.kind, m.byteIndex, m.mask]];
+    [self log:[NSString stringWithFormat:@"%@ → type %d, byte %d, mask %02X", RFActionName(action), m.kind, m.byteIndex, m.mask]];
     if ([self hasMapping]) [self saveMapping];   // salva a cada passo depois dos obrigatórios
     gWaitRelease = rf_differs(gLast, gLastLen);   // já soltou? então não precisa esperar
     [self advanceCalibration];
@@ -592,14 +592,14 @@ static NSString *rf_hex(const uint8_t *r, int len) {
 }
 
 - (NSString *)lastReportHex {
-    return gLastLen ? rf_hex(gLast, gLastLen) : @"(nenhum dado recebido do controle)";
+    return gLastLen ? rf_hex(gLast, gLastLen) : @"(no data received from the controller)";
 }
 
 - (void)handleReport:(const uint8_t *)r length:(int)len {
     len = MIN(len, RF_REPORT_MAX);
     if (!self.connected && gHasTarget) {
         // O controle reconectou sozinho e já está mandando dados: considera conectado
-        [self log:@"Dados do controle chegando: marcando como conectado"];
+        [self log:@"Controller data arriving: marking as connected"];
         [self onConnectedTo:gTarget];
     }
     memcpy(gLast, r, len);
@@ -694,40 +694,40 @@ static void rf_bt_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint1
 
     switch (packet[0]) {
         case BTSTACK_EVENT_STATE:
-            [bt log:[NSString stringWithFormat:@"BTstack estado %u%@", packet[2], packet[2] == HCI_STATE_WORKING ? @" (pronto)" : @""]];
+            [bt log:[NSString stringWithFormat:@"BTstack state %u%@", packet[2], packet[2] == HCI_STATE_WORKING ? @" (ready)" : @""]];
             if (packet[2] == HCI_STATE_WORKING) [bt btReady];
             break;
         case L2CAP_EVENT_SERVICE_REGISTERED:
             // status != 0: outro app (ex.: PadProbe aberto em segundo plano) já registrou o serviço HID
-            [bt log:[NSString stringWithFormat:@"Serviço HID PSM 0x%02X registrado, status 0x%02X%@", READ_BT_16(packet, 3), packet[2],
-                     packet[2] ? @" (FALHOU: feche o PadProbe e outros apps de Bluetooth)" : @""]];
+            [bt log:[NSString stringWithFormat:@"HID service PSM 0x%02X registered, status 0x%02X%@", READ_BT_16(packet, 3), packet[2],
+                     packet[2] ? @" (FAILED: close PadProbe and other Bluetooth apps)" : @""]];
             break;
         case HCI_EVENT_COMMAND_STATUS:
             if (packet[2] != 0) {
-                [bt log:[NSString stringWithFormat:@"Comando HCI 0x%04X recusado, status 0x%02X", READ_BT_16(packet, 4), packet[2]]];
+                [bt log:[NSString stringWithFormat:@"HCI command 0x%04X rejected, status 0x%02X", READ_BT_16(packet, 4), packet[2]]];
             }
             break;
         case HCI_EVENT_MODE_CHANGE_EVENT:
             // modo 0 = ativo, 2 = sniff (economia de energia: pode atrasar os dados)
-            [bt log:[NSString stringWithFormat:@"Modo do link: %u (status 0x%02X, intervalo %u)", packet[5], packet[2], READ_BT_16(packet, 6)]];
+            [bt log:[NSString stringWithFormat:@"Link mode: %u (status 0x%02X, interval %u)", packet[5], packet[2], READ_BT_16(packet, 6)]];
             break;
         case HCI_EVENT_ROLE_CHANGE:
-            [bt log:[NSString stringWithFormat:@"Troca de papel: status 0x%02X, papel %u", packet[2], packet[9]]];
+            [bt log:[NSString stringWithFormat:@"Role change: status 0x%02X, role %u", packet[2], packet[9]]];
             break;
         case HCI_EVENT_HARDWARE_ERROR:
-            [bt log:[NSString stringWithFormat:@"ERRO DE HARDWARE do Bluetooth: 0x%02X", packet[2]]];
+            [bt log:[NSString stringWithFormat:@"Bluetooth HARDWARE ERROR: 0x%02X", packet[2]]];
             break;
         case HCI_EVENT_DATA_BUFFER_OVERFLOW:
-            [bt log:@"Buffer de dados do Bluetooth estourou"];
+            [bt log:@"Bluetooth data buffer overflow"];
             break;
         case HCI_EVENT_USER_CONFIRMATION_REQUEST:
-            [bt log:@"Pareamento seguro (SSP) pedido; o BTstack aceita automaticamente"];
+            [bt log:@"Secure pairing (SSP) requested; BTstack accepts it automatically"];
             break;
         case HCI_EVENT_AUTHENTICATION_COMPLETE_EVENT:
-            [bt log:[NSString stringWithFormat:@"Autenticação concluída, status 0x%02X", packet[2]]];
+            [bt log:[NSString stringWithFormat:@"Authentication finished, status 0x%02X", packet[2]]];
             break;
         case BTSTACK_EVENT_POWERON_FAILED:
-            [bt setStatusText:@"Falha ao ligar o Bluetooth (desligue o Bluetooth do iOS em Ajustes)"];
+            [bt setStatusText:@"Could not turn Bluetooth on (turn off iOS Bluetooth in Settings)"];
             break;
         case HCI_EVENT_INQUIRY_RESULT: {
             int num = packet[2];
@@ -765,8 +765,8 @@ static void rf_bt_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint1
         }
         case HCI_EVENT_INQUIRY_COMPLETE:
             gInquiry = 0;
-            [bt log:[NSString stringWithFormat:@"Busca terminada: %d dispositivo(s)", gDeviceCount]];
-            [bt setStatusText:@"Busca terminada. Toque no controle para conectar."];
+            [bt log:[NSString stringWithFormat:@"Search finished: %d device(s)", gDeviceCount]];
+            [bt setStatusText:@"Search finished. Tap your controller to connect."];
             rf_next_name();
             break;
         case HCI_EVENT_REMOTE_NAME_REQUEST_COMPLETE: {
@@ -776,7 +776,7 @@ static void rf_bt_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint1
             if (idx >= 0 && packet[2] == 0) {
                 strncpy(gDevices[idx].name, (const char *)&packet[9], 63);
                 gDevices[idx].name[63] = 0;
-                [bt log:[NSString stringWithFormat:@"Nome de %@: %s", rf_addr(addr), gDevices[idx].name]];
+                [bt log:[NSString stringWithFormat:@"Name of %@: %s", rf_addr(addr), gDevices[idx].name]];
                 [bt changed];
             }
             rf_next_name();
@@ -785,13 +785,13 @@ static void rf_bt_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint1
         case HCI_EVENT_PIN_CODE_REQUEST: {
             uint8_t pin[16] = {'0', '0', '0', '0'};
             bt_flip_addr(addr, &packet[2]);
-            [bt log:[NSString stringWithFormat:@"Pedido de PIN de %@, respondendo 0000", rf_addr(addr)]];
+            [bt log:[NSString stringWithFormat:@"PIN request from %@, answering 0000", rf_addr(addr)]];
             bt_send_cmd(&hci_pin_code_request_reply, addr, 4, pin);
             break;
         }
         case L2CAP_EVENT_INCOMING_CONNECTION:
             bt_flip_addr(addr, &packet[2]);
-            [bt log:[NSString stringWithFormat:@"Conexão de entrada de %@, PSM 0x%02X: aceitando", rf_addr(addr), READ_BT_16(packet, 10)]];
+            [bt log:[NSString stringWithFormat:@"Incoming connection from %@, PSM 0x%02X: accepting", rf_addr(addr), READ_BT_16(packet, 10)]];
             bt_send_cmd(&l2cap_accept_connection, READ_BT_16(packet, 12));
             break;
         case L2CAP_EVENT_CHANNEL_OPENED: {
@@ -799,11 +799,11 @@ static void rf_bt_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint1
             uint16_t psm = READ_BT_16(packet, 11);
             uint16_t cid = READ_BT_16(packet, 13);
             if (packet[2]) {
-                [bt log:[NSString stringWithFormat:@"Falha ao abrir canal 0x%02X: 0x%02X", psm, packet[2]]];
-                if (!bt.connected) [bt setStatusText:@"Não conectou. Ligue o controle (ou coloque em pareamento) e tente de novo."];
+                [bt log:[NSString stringWithFormat:@"Failed to open channel 0x%02X: 0x%02X", psm, packet[2]]];
+                if (!bt.connected) [bt setStatusText:@"Could not connect. Turn on the controller (or put it in pairing mode) and try again."];
                 break;
             }
-            [bt log:[NSString stringWithFormat:@"Canal aberto: PSM 0x%02X com %@", psm, rf_addr(addr)]];
+            [bt log:[NSString stringWithFormat:@"Channel open: PSM 0x%02X with %@", psm, rf_addr(addr)]];
             if (psm == PSM_HID_CONTROL) {
                 // Proíbe o modo "sniff" (economia de energia) neste link: nele o controle só
                 // conversa em intervalos espaçados e os botões chegam com atraso.
@@ -822,14 +822,14 @@ static void rf_bt_handler(uint8_t type, uint16_t channel, uint8_t *packet, uint1
         }
         case L2CAP_EVENT_CHANNEL_CLOSED: {
             uint16_t cid = READ_BT_16(packet, 2);
-            [bt log:[NSString stringWithFormat:@"Canal 0x%04X fechado", cid]];
+            [bt log:[NSString stringWithFormat:@"Channel 0x%04X closed", cid]];
             if (cid == gInterruptCid) gInterruptCid = 0;
             if (cid == gControlCid) gControlCid = 0;
             if (!gInterruptCid && bt.connected) [bt onDisconnected];
             break;
         }
         case HCI_EVENT_DISCONNECTION_COMPLETE:
-            [bt log:[NSString stringWithFormat:@"Desconectado (motivo 0x%02X)", packet[5]]];
+            [bt log:[NSString stringWithFormat:@"Disconnected (reason 0x%02X)", packet[5]]];
             gInterruptCid = gControlCid = 0;
             if (bt.connected) [bt onDisconnected];
             break;

@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>pt_BR</string>
+	<string>en</string>
 	<key>CFBundleDisplayName</key>
 	<string>SNES16</string>
 	<key>CFBundleExecutable</key>

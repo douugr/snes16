@@ -93,7 +93,7 @@ typedef struct {
     NSString *error = nil;
     if (![[RFCore shared] loadGameAtPath:self.path error:&error]) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Erro" message:error preferredStyle:UIAlertControllerStyleAlert];
+            UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Error" message:error preferredStyle:UIAlertControllerStyleAlert];
             [a addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) {
                 [weakSelf dismissViewControllerAnimated:YES completion:nil];
             }]];
@@ -115,7 +115,7 @@ typedef struct {
     if (![RFCore shared].loaded || self.link) return;
     self.link = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick)];
     [self.link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
-    if ([RFCore shared].patched) [self showToast:@"Patch aplicado"];
+    if ([RFCore shared].patched) [self showToast:@"Patch applied"];
     if ([[RFCore shared] hasStateSlot:0]) [self offerResume];
 }
 
@@ -124,27 +124,27 @@ typedef struct {
     self.menuOpen = YES;
     self.paused = YES;
     NSString *when = [self describeDate:[[RFCore shared] dateForStateSlot:0]];
-    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Continuar de onde parou?"
-                                                               message:[NSString stringWithFormat:@"Há um salvamento automático de %@.", when]
+    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Continue where you left off?"
+                                                               message:[NSString stringWithFormat:@"There is an autosave from %@.", when]
                                                         preferredStyle:UIAlertControllerStyleAlert];
     __weak RFGameViewController *weakSelf = self;
-    [a addAction:[UIAlertAction actionWithTitle:@"Começar do início" style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) {
+    [a addAction:[UIAlertAction actionWithTitle:@"Start over" style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) {
         [weakSelf resume];
     }]];
-    [a addAction:[UIAlertAction actionWithTitle:@"Continuar" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
-        if (![[RFCore shared] loadStateSlot:0]) [weakSelf showToast:@"Não foi possível carregar"];
+    [a addAction:[UIAlertAction actionWithTitle:@"Continue" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
+        if (![[RFCore shared] loadStateSlot:0]) [weakSelf showToast:@"Could not load"];
         [weakSelf resume];
     }]];
     [self presentViewController:a animated:YES completion:nil];
 }
 
 - (NSString *)describeDate:(NSDate *)date {
-    if (!date) return @"vazio";
+    if (!date) return @"empty";
     static NSDateFormatter *fmt;
     if (!fmt) {
         fmt = [[NSDateFormatter alloc] init];
-        fmt.locale = [NSLocale localeWithLocaleIdentifier:@"pt_BR"];
-        fmt.dateFormat = @"dd/MM 'às' HH:mm";
+        fmt.locale = [NSLocale localeWithLocaleIdentifier:@"en_US"];
+        fmt.dateFormat = @"MMM d 'at' HH:mm";
     }
     return [fmt stringFromDate:date];
 }
@@ -152,23 +152,23 @@ typedef struct {
 // Lista os slots para salvar (1 a 3) ou carregar (os que existem, incluindo o automático)
 - (void)showSlotsForSaving:(BOOL)saving {
     RFCore *core = [RFCore shared];
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:saving ? @"Salvar em qual slot?" : @"Carregar qual estado?"
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:saving ? @"Save to which slot?" : @"Load which state?"
                                                                    message:nil
                                                             preferredStyle:UIAlertControllerStyleActionSheet];
     __weak RFGameViewController *weakSelf = self;
     for (int slot = saving ? 1 : 0; slot <= 3; slot++) {
         NSDate *date = [core dateForStateSlot:slot];
         if (!saving && !date) continue;
-        NSString *name = slot == 0 ? @"Automático" : [NSString stringWithFormat:@"Slot %d", slot];
+        NSString *name = slot == 0 ? @"Autosave" : [NSString stringWithFormat:@"Slot %d", slot];
         NSString *title = [NSString stringWithFormat:@"%@ — %@", name, [self describeDate:date]];
         [sheet addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
             BOOL ok = saving ? [[RFCore shared] saveStateSlot:slot] : [[RFCore shared] loadStateSlot:slot];
-            NSString *msg = saving ? (ok ? @"Estado salvo no %@" : @"Não foi possível salvar") : (ok ? @"%@ carregado" : @"Não foi possível carregar");
+            NSString *msg = saving ? (ok ? @"Saved to %@" : @"Could not save") : (ok ? @"%@ loaded" : @"Could not load");
             [weakSelf showToast:[NSString stringWithFormat:msg, name]];
             [weakSelf resume];
         }]];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Voltar" style:UIAlertActionStyleCancel handler:^(UIAlertAction *a) {
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Back" style:UIAlertActionStyleCancel handler:^(UIAlertAction *a) {
         [weakSelf resume];
     }]];
     sheet.popoverPresentationController.sourceView = self.pad;
@@ -318,12 +318,12 @@ typedef struct {
     double emuAvg = p->frames ? p->emuSum * 1000.0 / p->frames : 0;
     double drawAvg = p->draws ? p->drawSum * 1000.0 / p->draws : 0;
     uint32_t underruns = [[RFAudio shared] underruns] - p->underrunsAtStart;
-    NSString *ahead = ![self runAheadEnabled] ? @"desligado" :
-                      (CACurrentMediaTime() < _aheadPausedUntil ? @"pausado (sem folga)" :
-                       [NSString stringWithFormat:@"ligado (%d%%)", p->ticks ? p->aheadFrames * 100 / p->ticks : 0]);
-    NSString *input = p->inputs ? [NSString stringWithFormat:@"%.1f ms (máx %.1f)", p->inputSum * 1000.0 / p->inputs, p->inputMax * 1000.0] : @"—";
+    NSString *ahead = ![self runAheadEnabled] ? @"off" :
+                      (CACurrentMediaTime() < _aheadPausedUntil ? @"paused (no headroom)" :
+                       [NSString stringWithFormat:@"on (%d%%)", p->ticks ? p->aheadFrames * 100 / p->ticks : 0]);
+    NSString *input = p->inputs ? [NSString stringWithFormat:@"%.1f ms (max %.1f)", p->inputSum * 1000.0 / p->inputs, p->inputMax * 1000.0] : @"—";
     NSString *text = [NSString stringWithFormat:
-        @"tela %.1f/s  jogo %.1f q/s\nemu %.1f ms (máx %.1f)  gl %.1f ms (máx %.1f)\nextra %d  pulos %d  atrasos %d  som-falhas %u  fila %u-%u\nbotão→quadro %@  run-ahead %@",
+        @"screen %.1f/s  game %.1f f/s\nemu %.1f ms (max %.1f)  gl %.1f ms (max %.1f)\nextra %d  skips %d  late %d  audio-gaps %u  queue %u-%u\nbutton→frame %@  run-ahead %@",
         p->ticks / elapsed, p->frames / elapsed, emuAvg, p->emuMax * 1000.0, drawAvg, p->drawMax * 1000.0,
         p->extraFrames, p->skippedTicks, p->lateTicks, underruns, p->minAudio == UINT32_MAX ? 0 : p->minAudio, p->maxAudio,
         input, ahead];
@@ -379,50 +379,50 @@ typedef struct {
     RFCore *core = [RFCore shared];
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:core.gameName message:nil preferredStyle:UIAlertControllerStyleActionSheet];
     __weak RFGameViewController *weakSelf = self;
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Continuar" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Continue" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         [weakSelf resume];
     }]];
     // O menu continua "aberto" (jogo pausado) enquanto a lista de slots aparece
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Salvar estado…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Save state…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ [weakSelf showSlotsForSaving:YES]; });
     }]];
     if ([self hasAnyState]) {
-        [sheet addAction:[UIAlertAction actionWithTitle:@"Carregar estado…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [sheet addAction:[UIAlertAction actionWithTitle:@"Load state…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ [weakSelf showSlotsForSaving:NO]; });
         }]];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Reiniciar jogo" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Reset game" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         [[RFCore shared] reset];
         [weakSelf resume];
     }]];
-    NSString *touchTitle = self.pad.controlsHidden ? @"Mostrar controle na tela" : @"Esconder controle na tela";
+    NSString *touchTitle = self.pad.controlsHidden ? @"Show on-screen controls" : @"Hide on-screen controls";
     [sheet addAction:[UIAlertAction actionWithTitle:touchTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         BOOL show = weakSelf.pad.controlsHidden;
         [[NSUserDefaults standardUserDefaults] setBool:show forKey:@"RFShowTouch"];
         weakSelf.pad.controlsHidden = !show;
         [weakSelf resume];
     }]];
-    NSString *filterTitle = self.video.smooth ? @"Imagem: nítida (pixels)" : @"Imagem: suavizada";
+    NSString *filterTitle = self.video.smooth ? @"Image: sharp (pixels)" : @"Image: smooth";
     [sheet addAction:[UIAlertAction actionWithTitle:filterTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         weakSelf.video.smooth = !weakSelf.video.smooth;
         [[NSUserDefaults standardUserDefaults] setBool:weakSelf.video.smooth forKey:@"RFSmooth"];
         [weakSelf resume];
     }]];
-    NSString *aheadTitle = [self runAheadEnabled] ? @"Reduzir atraso (run-ahead): ligado" : @"Reduzir atraso (run-ahead): desligado";
+    NSString *aheadTitle = [self runAheadEnabled] ? @"Reduce input lag (run-ahead): on" : @"Reduce input lag (run-ahead): off";
     [sheet addAction:[UIAlertAction actionWithTitle:aheadTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         [[NSUserDefaults standardUserDefaults] setBool:![weakSelf runAheadEnabled] forKey:@"RFRunAhead"];
         [weakSelf resume];
     }]];
-    NSString *perfTitle = self.perfLabel.hidden ? @"Mostrar desempenho" : @"Esconder desempenho";
+    NSString *perfTitle = self.perfLabel.hidden ? @"Show performance" : @"Hide performance";
     [sheet addAction:[UIAlertAction actionWithTitle:perfTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         weakSelf.perfLabel.hidden = !weakSelf.perfLabel.hidden;
         [[NSUserDefaults standardUserDefaults] setBool:!weakSelf.perfLabel.hidden forKey:@"RFShowPerf"];
         [weakSelf resume];
     }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Sair do jogo" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Quit game" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
         [weakSelf quit];
     }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancelar" style:UIAlertActionStyleCancel handler:^(UIAlertAction *a) {
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction *a) {
         [weakSelf resume];
     }]];
     sheet.popoverPresentationController.sourceView = self.pad;
@@ -458,7 +458,7 @@ typedef struct {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"Controle Bluetooth";
+    self.title = @"Bluetooth Controller";
     self.logLines = [NSMutableArray array];
     RFThemeApplyTable(self.tableView);
     [RFBluetooth shared].delegate = self;
@@ -500,7 +500,7 @@ typedef struct {
     for (unsigned i = 0; i < sizeof(map) / sizeof(map[0]); i++) {
         if (m & map[i].bit) [names addObject:map[i].name];
     }
-    return names.count ? [names componentsJoinedByString:@" "] : @"(nada apertado)";
+    return names.count ? [names componentsJoinedByString:@" "] : @"(nothing pressed)";
 }
 
 - (void)bluetoothDidChange {
@@ -516,13 +516,13 @@ typedef struct {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    return @[@"Estado", @"Ações", @"Dispositivos encontrados"][section];
+    return @[@"Status", @"Actions", @"Devices found"][section];
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (section == 1) {
-        return @"Para parear: desligue o Bluetooth do iOS em Ajustes, coloque o controle em modo de pareamento e toque em Procurar. "
-               @"Depois de conectado, use \"Configurar botões\" uma vez; o mapeamento fica salvo.";
+        return @"To pair: turn off iOS Bluetooth in Settings, put your controller in pairing mode and tap Search. "
+               @"Once connected, use \"Set up buttons\" once; the button map is saved.";
     }
     return nil;
 }
@@ -544,9 +544,9 @@ typedef struct {
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
         if (indexPath.row == 0) {
             cell.textLabel.text = bt.status;
-            cell.detailTextLabel.text = bt.connected ? (bt.hasMapping ? @"Botões configurados" : @"Botões ainda não configurados") : nil;
+            cell.detailTextLabel.text = bt.connected ? (bt.hasMapping ? @"Buttons set up" : @"Buttons not set up yet") : nil;
         } else {
-            cell.textLabel.text = @"Teste ao vivo";
+            cell.textLabel.text = @"Live test";
             cell.detailTextLabel.text = [self liveText];
             cell.detailTextLabel.font = [UIFont boldSystemFontOfSize:20];
         }
@@ -557,34 +557,34 @@ typedef struct {
         cell.textLabel.textColor = RFAccent();
         if (bt.calibrating) {
             if (indexPath.row == 0) {
-                cell.textLabel.text = [NSString stringWithFormat:@"Aperte: %@", RFActionName(bt.calibratingAction)];
+                cell.textLabel.text = [NSString stringWithFormat:@"Press: %@", RFActionName(bt.calibratingAction)];
                 cell.textLabel.font = [UIFont boldSystemFontOfSize:24];
                 cell.textLabel.textColor = RFThemeText();
-                cell.detailTextLabel.text = @"Solte o botão depois de apertar. Toque aqui para pular este.";
+                cell.detailTextLabel.text = @"Release the button after pressing it. Tap here to skip this one.";
             } else {
                 if (bt.hasMapping) {
-                    cell.textLabel.text = @"Concluir agora (pular o resto)";
+                    cell.textLabel.text = @"Finish now (skip the rest)";
                 } else {
-                    cell.textLabel.text = @"Cancelar configuração";
+                    cell.textLabel.text = @"Cancel setup";
                     cell.textLabel.textColor = [UIColor redColor];
                 }
             }
             return cell;
         }
-        NSArray *titles = bt.connected ? @[@"Procurar controles", @"Configurar botões", @"Esquecer este controle"]
-                                       : @[@"Procurar controles", @"Esquecer controle salvo"];
+        NSArray *titles = bt.connected ? @[@"Search for controllers", @"Set up buttons", @"Forget this controller"]
+                                       : @[@"Search for controllers", @"Forget saved controller"];
         cell.textLabel.text = titles[indexPath.row];
-        if ([titles[indexPath.row] hasPrefix:@"Esquecer"]) cell.textLabel.textColor = [UIColor redColor];
+        if ([titles[indexPath.row] hasPrefix:@"Forget"]) cell.textLabel.textColor = [UIColor redColor];
         return cell;
     }
 
     if (bt.deviceCount == 0) {
-        cell.textLabel.text = @"Nenhum ainda";
+        cell.textLabel.text = @"None yet";
         cell.textLabel.textColor = RFThemeDim();
         cell.selectionStyle = UITableViewCellSelectionStyleNone;
     } else {
         cell.textLabel.text = [bt deviceTitleAtIndex:indexPath.row];
-        cell.detailTextLabel.text = @"Toque para conectar";
+        cell.detailTextLabel.text = @"Tap to connect";
     }
     return cell;
 }
@@ -639,7 +639,7 @@ typedef struct {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"Enviar ROMs";
+    self.title = @"Upload ROMs";
     self.view.backgroundColor = RFThemeGridColor();
 
     UILabel *step = [[UILabel alloc] init];
@@ -647,7 +647,7 @@ typedef struct {
     step.textAlignment = NSTextAlignmentCenter;
     step.font = RFThemeLabelFont(17);
     step.textColor = RFThemeText();
-    step.text = @"No computador (na mesma rede Wi-Fi), abra este endereço no navegador:";
+    step.text = @"On your computer (same Wi-Fi network), open this address in a browser:";
     step.tag = 1;
     [self.view addSubview:step];
 
@@ -692,12 +692,12 @@ typedef struct {
     NSString *ip = [RFWebServer localIPAddress];
     NSString *error = nil;
     if (!ip) {
-        self.addressLabel.text = @"Sem Wi-Fi";
-        self.infoLabel.text = @"Conecte o iPad a uma rede Wi-Fi e abra esta tela de novo.";
+        self.addressLabel.text = @"No Wi-Fi";
+        self.infoLabel.text = @"Connect the iPad to a Wi-Fi network and open this screen again.";
         return;
     }
     if (![server startOnPort:8080 error:&error]) {
-        self.addressLabel.text = @"Erro";
+        self.addressLabel.text = @"Error";
         self.infoLabel.text = error;
         return;
     }
@@ -706,10 +706,10 @@ typedef struct {
 }
 
 - (void)updateInfo {
-    NSString *base = @"Arraste as ROMs (e os patches .ips/.bps) para a página.\n"
-                     @"Patch com o mesmo nome da ROM é aplicado automaticamente ao abrir o jogo.\n\n"
-                     @"O envio só funciona enquanto esta tela estiver aberta.";
-    self.infoLabel.text = self.received ? [NSString stringWithFormat:@"%@\n\nAlterações recebidas: %ld", base, (long)self.received] : base;
+    NSString *base = @"Drag your ROMs (and .ips/.bps patches) onto the page.\n"
+                     @"A patch with the same name as the ROM is applied automatically when the game starts.\n\n"
+                     @"Uploading only works while this screen is open.";
+    self.infoLabel.text = self.received ? [NSString stringWithFormat:@"%@\n\nChanges received: %ld", base, (long)self.received] : base;
 }
 
 - (void)viewWillDisappear:(BOOL)animated {
@@ -919,7 +919,7 @@ static CGRect rf_label_rect(CGRect b) {
     [super viewDidLoad];
     self.title = @"SNES16";
     self.navigationItem.titleView = [[UIView alloc] init];   // o letreiro fica no cabeçalho
-    self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Jogos" style:UIBarButtonItemStylePlain target:nil action:nil];
+    self.navigationItem.backBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Games" style:UIBarButtonItemStylePlain target:nil action:nil];
     self.tableView.backgroundView = RFThemeGridView();
     self.tableView.backgroundColor = [UIColor colorWithRed:0.80 green:0.79 blue:0.83 alpha:1];
     self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
@@ -927,8 +927,8 @@ static CGRect rf_label_rect(CGRect b) {
     self.tableView.indicatorStyle = UIScrollViewIndicatorStyleBlack;
     self.tableView.tableHeaderView = [[RFLibraryHeader alloc] initWithFrame:CGRectMake(0, 0, 320, 150)];
     self.navigationItem.rightBarButtonItems = @[
-        [[UIBarButtonItem alloc] initWithTitle:@"Controle" style:UIBarButtonItemStylePlain target:self action:@selector(openController)],
-        [[UIBarButtonItem alloc] initWithTitle:@"Enviar ROMs" style:UIBarButtonItemStylePlain target:self action:@selector(openUpload)],
+        [[UIBarButtonItem alloc] initWithTitle:@"Controller" style:UIBarButtonItemStylePlain target:self action:@selector(openController)],
+        [[UIBarButtonItem alloc] initWithTitle:@"Upload ROMs" style:UIBarButtonItemStylePlain target:self action:@selector(openUpload)],
     ];
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemRefresh
                                                                                           target:self
@@ -959,8 +959,8 @@ static CGRect rf_label_rect(CGRect b) {
     }
     self.roms = [list sortedArrayUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
     RFLibraryHeader *header = (RFLibraryHeader *)self.tableView.tableHeaderView;
-    header.tagline.text = self.roms.count == 1 ? @"1 CARTUCHO NA ESTANTE · APERTE START" :
-                          [NSString stringWithFormat:@"%lu CARTUCHOS NA ESTANTE · APERTE START", (unsigned long)self.roms.count];
+    header.tagline.text = self.roms.count == 1 ? @"1 CARTRIDGE ON THE SHELF · PRESS START" :
+                          [NSString stringWithFormat:@"%lu CARTRIDGES ON THE SHELF · PRESS START", (unsigned long)self.roms.count];
     [self updatePrompt];
     [self.tableView reloadData];
 }
@@ -979,7 +979,7 @@ static CGRect rf_label_rect(CGRect b) {
 
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (self.roms.count) return nil;
-    return @"Nenhum cartucho ainda. Toque em \"Enviar ROMs\" para mandar os arquivos pelo navegador do computador.";
+    return @"No cartridges yet. Tap \"Upload ROMs\" to send files from your computer's browser.";
 }
 
 - (void)tableView:(UITableView *)tableView willDisplayFooterView:(UIView *)view forSection:(NSInteger)section {
@@ -992,11 +992,11 @@ static CGRect rf_label_rect(CGRect b) {
     NSString *f = self.roms[indexPath.row];
     cell.title.text = f.stringByDeletingPathExtension.uppercaseString;
     NSString *ext = f.pathExtension.lowercaseString;
-    NSString *system = [ext isEqualToString:@"bsx"] ? @"SATELLAVIEW" : @"SUPER NINTENDO · 16 BITS";
-    cell.cart.badge = @"CARTUCHO · 16 BITS";
+    NSString *system = [ext isEqualToString:@"bsx"] ? @"SATELLAVIEW" : @"SUPER NINTENDO · 16-BIT";
+    cell.cart.badge = @"16-BIT CARTRIDGE";
     [cell.cart setNeedsDisplay];
     NSString *patch = [RFCore patchPathForROM:[RFDir(@"roms") stringByAppendingPathComponent:f]];
-    cell.subtitle.text = patch ? [NSString stringWithFormat:@"%@ · COM PATCH %@", system, patch.pathExtension.uppercaseString] : system;
+    cell.subtitle.text = patch ? [NSString stringWithFormat:@"%@ · %@ PATCH", system, patch.pathExtension.uppercaseString] : system;
     return cell;
 }
 
@@ -1005,19 +1005,19 @@ static CGRect rf_label_rect(CGRect b) {
 }
 
 - (NSString *)tableView:(UITableView *)tableView titleForDeleteConfirmationButtonForRowAtIndexPath:(NSIndexPath *)indexPath {
-    return @"Apagar";
+    return @"Delete";
 }
 
 - (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)style forRowAtIndexPath:(NSIndexPath *)indexPath {
     if (style != UITableViewCellEditingStyleDelete) return;
     NSString *f = self.roms[indexPath.row];
-    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Apagar jogo?"
-                                                               message:[NSString stringWithFormat:@"%@ será removido do iPad (saves e estados ficam guardados).", f]
+    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Delete game?"
+                                                               message:[NSString stringWithFormat:@"%@ will be removed from the iPad (saves and states are kept).", f]
                                                         preferredStyle:UIAlertControllerStyleAlert];
-    [a addAction:[UIAlertAction actionWithTitle:@"Cancelar" style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) {
+    [a addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction *x) {
         [tableView setEditing:NO animated:YES];
     }]];
-    [a addAction:[UIAlertAction actionWithTitle:@"Apagar" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *x) {
+    [a addAction:[UIAlertAction actionWithTitle:@"Delete" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *x) {
         [[NSFileManager defaultManager] removeItemAtPath:[RFDir(@"roms") stringByAppendingPathComponent:f] error:nil];
         [self reload];
     }]];

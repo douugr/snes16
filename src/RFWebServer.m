@@ -61,7 +61,7 @@
     self.romsDir = RFDir(@"roms");
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
-        if (error) *error = @"Não consegui criar o socket.";
+        if (error) *error = @"Could not create the socket.";
         return NO;
     }
     int yes = 1;
@@ -74,7 +74,7 @@
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
     if (bind(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0 || listen(fd, 8) != 0) {
         close(fd);
-        if (error) *error = [NSString stringWithFormat:@"A porta %u está ocupada.", port];
+        if (error) *error = [NSString stringWithFormat:@"Port %u is already in use.", port];
         return NO;
     }
     self.listenFd = fd;
@@ -187,7 +187,7 @@ static void rf_respond_error(int fd, int status, NSString *message) {
     NSArray *requestLine = [lines.firstObject componentsSeparatedByString:@" "];
     if (requestLine.count < 2) {
         free(buf);
-        rf_respond_error(fd, 400, @"requisição inválida");
+        rf_respond_error(fd, 400, @"invalid request");
         return;
     }
     NSString *method = requestLine[0];
@@ -209,15 +209,15 @@ static void rf_respond_error(int fd, int status, NSString *message) {
         NSString *file = [[NSBundle mainBundle] pathForResource:@"upload" ofType:@"html"];
         NSData *page = file ? [NSData dataWithContentsOfFile:file] : nil;
         if (page) rf_respond(fd, 200, @"text/html; charset=utf-8", page);
-        else rf_respond_error(fd, 404, @"página não encontrada");
+        else rf_respond_error(fd, 404, @"page not found");
     } else if ([method isEqualToString:@"GET"] && [path isEqualToString:@"/api/list"]) {
         rf_respond_json(fd, 200, @{@"ok": @YES, @"files": [self listFiles]});
     } else if ([method isEqualToString:@"PUT"] && [path isEqualToString:@"/api/upload"]) {
         NSString *name = [self nameFromQuery:query];
         if (!name) {
-            rf_respond_error(fd, 400, @"nome de arquivo ou extensão não aceitos");
+            rf_respond_error(fd, 400, @"file name or extension not accepted");
         } else if (contentLength == 0 || contentLength > RF_MAX_UPLOAD) {
-            rf_respond_error(fd, 413, @"arquivo vazio ou grande demais");
+            rf_respond_error(fd, 413, @"file empty or too large");
         } else {
             NSString *err = [self receiveFile:name fd:fd length:contentLength initial:buf + headerLen initialLength:used - headerLen];
             if (err) rf_respond_error(fd, 500, err);
@@ -233,10 +233,10 @@ static void rf_respond_error(int fd, int status, NSString *message) {
             rf_respond_json(fd, 200, @{@"ok": @YES});
             [self notifyChange];
         } else {
-            rf_respond_error(fd, 404, @"arquivo não encontrado");
+            rf_respond_error(fd, 404, @"file not found");
         }
     } else {
-        rf_respond_error(fd, 404, @"não encontrado");
+        rf_respond_error(fd, 404, @"not found");
     }
     free(buf);
 }
@@ -258,7 +258,7 @@ static void rf_respond_error(int fd, int status, NSString *message) {
                   initial:(const char *)initial initialLength:(size_t)initialLength {
     NSString *temp = [self.romsDir stringByAppendingPathComponent:[NSString stringWithFormat:@".upload-%@", [NSUUID UUID].UUIDString]];
     FILE *f = fopen(temp.fileSystemRepresentation, "wb");
-    if (!f) return @"não consegui criar o arquivo no iPad";
+    if (!f) return @"could not create the file on the iPad";
     unsigned long long remaining = length;
     size_t first = (size_t)MIN((unsigned long long)initialLength, remaining);
     if (first) fwrite(initial, 1, first, f);
@@ -275,13 +275,13 @@ static void rf_respond_error(int fd, int status, NSString *message) {
     NSFileManager *fm = [NSFileManager defaultManager];
     if (!ok) {
         [fm removeItemAtPath:temp error:nil];
-        return @"o envio foi interrompido";
+        return @"the upload was interrupted";
     }
     NSString *dest = [self.romsDir stringByAppendingPathComponent:name];
     [fm removeItemAtPath:dest error:nil];
     if (![fm moveItemAtPath:temp toPath:dest error:nil]) {
         [fm removeItemAtPath:temp error:nil];
-        return @"não consegui gravar o arquivo";
+        return @"could not write the file";
     }
     return nil;
 }

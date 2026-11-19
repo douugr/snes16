@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SNES16 · Enviar ROMs</title>
+<title>SNES16 · Upload ROMs</title>
 <style>
   :root { --bg:#cdcbd4; --card:#f7f6fa; --line:#c9c6d2; --text:#26232e; --dim:#6b6777; --accent:#5c4a9e; --lilac:#b8abeb; --ok:#3f9e6a; }
   * { box-sizing: border-box; }
@@ -50,22 +50,22 @@
 <main>
   <header>
     <h1>SNES16</h1>
-    <p class="sub">Arraste as ROMs e os patches para cá · direto para o iPad</p>
+    <p class="sub">Drop ROMs and patches here · straight to the iPad</p>
   </header>
 
   <div id="drop">
-    <strong>Solte os arquivos aqui</strong>
-    <small>ou clique para escolher · .sfc .smc .swc .fig · patches .ips .bps</small>
+    <strong>Drop files here</strong>
+    <small>or click to choose · .sfc .smc .swc .fig · patches .ips .bps</small>
     <input id="pick" type="file" multiple hidden>
   </div>
   <div id="queue"></div>
 
-  <h2>No iPad</h2>
-  <table><tbody id="files"><tr><td class="empty">Carregando…</td></tr></tbody></table>
+  <h2>On the iPad</h2>
+  <table><tbody id="files"><tr><td class="empty">Loading…</td></tr></tbody></table>
 
   <div class="tip">
-    <b>Patch automático:</b> dê ao patch o mesmo nome da ROM (ex.: <i>Meu Jogo.sfc</i> + <i>Meu Jogo.bps</i>).
-    O SNES16 aplica o patch ao abrir o jogo, sem alterar a ROM original.
+    <b>Automatic patching:</b> give the patch the same name as the ROM (e.g. <i>My Game.sfc</i> + <i>My Game.bps</i>).
+    SNES16 applies the patch when the game starts, without changing the original ROM.
   </div>
 </main>
 <script>
@@ -86,24 +86,24 @@ async function refresh() {
     const r = await fetch("/api/list", {cache: "no-store"});
     const data = await r.json();
     const names = new Set(data.files.map(f => f.name.replace(/\.[^.]+$/, "").toLowerCase() + "|" + ext(f.name)));
-    if (!data.files.length) { filesEl.innerHTML = '<tr><td class="empty">Nenhum arquivo ainda.</td></tr>'; return; }
+    if (!data.files.length) { filesEl.innerHTML = '<tr><td class="empty">No files yet.</td></tr>'; return; }
     filesEl.innerHTML = "";
     for (const f of data.files) {
       const e = ext(f.name), base = f.name.replace(/\.[^.]+$/, "").toLowerCase();
       let tag = "";
       if (e === "ips" || e === "bps") tag = '<span class="tag">patch</span>';
-      else if (names.has(base + "|ips") || names.has(base + "|bps")) tag = '<span class="tag">com patch</span>';
+      else if (names.has(base + "|ips") || names.has(base + "|bps")) tag = '<span class="tag">patched</span>';
       const tr = document.createElement("tr");
-      tr.innerHTML = `<td>${esc(f.name)}${tag}</td><td class="size">${fmtSize(f.size)}</td><td class="act"><button>Apagar</button></td>`;
+      tr.innerHTML = `<td>${esc(f.name)}${tag}</td><td class="size">${fmtSize(f.size)}</td><td class="act"><button>Delete</button></td>`;
       tr.querySelector("button").onclick = async () => {
-        if (!confirm(`Apagar ${f.name} do iPad?`)) return;
+        if (!confirm(`Delete ${f.name} from the iPad?`)) return;
         await fetch("/api/delete?name=" + encodeURIComponent(f.name), {method: "POST"});
         refresh();
       };
       filesEl.appendChild(tr);
     }
   } catch (e) {
-    filesEl.innerHTML = '<tr><td class="empty">Sem conexão com o iPad. A tela "Enviar ROMs" está aberta?</td></tr>';
+    filesEl.innerHTML = '<tr><td class="empty">No connection to the iPad. Is the "Upload ROMs" screen open?</td></tr>';
   }
 }
 
@@ -114,18 +114,18 @@ function upload(file) {
     row.innerHTML = `<div class="n">${esc(file.name)}</div><div class="bar"><i></i></div><div class="s">0%</div>`;
     queueEl.prepend(row);
     const bar = row.querySelector("i"), status = row.querySelector(".s");
-    if (!ACCEPT.includes(ext(file.name))) { status.textContent = "ignorado"; resolve(); return; }
+    if (!ACCEPT.includes(ext(file.name))) { status.textContent = "skipped"; resolve(); return; }
     const xhr = new XMLHttpRequest();
     xhr.open("PUT", "/api/upload?name=" + encodeURIComponent(file.name));
     xhr.upload.onprogress = e => { if (e.lengthComputable) { const p = Math.round(e.loaded / e.total * 100); bar.style.width = p + "%"; status.textContent = p + "%"; } };
     xhr.onload = () => {
-      let ok = false, msg = "erro";
+      let ok = false, msg = "error";
       try { const r = JSON.parse(xhr.responseText); ok = r.ok; msg = r.error || msg; } catch (e) {}
-      if (ok) { row.classList.add("done"); bar.style.width = "100%"; status.textContent = "enviado"; }
+      if (ok) { row.classList.add("done"); bar.style.width = "100%"; status.textContent = "done"; }
       else { status.textContent = msg; status.title = msg; }
       resolve();
     };
-    xhr.onerror = () => { status.textContent = "falhou"; resolve(); };
+    xhr.onerror = () => { status.textContent = "failed"; resolve(); };
     xhr.send(file);
   });
 }

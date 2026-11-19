@@ -184,7 +184,7 @@ static int16_t rf_input_state(unsigned port, unsigned device, unsigned index, un
     NSData *rom = [NSData dataWithContentsOfFile:romPath];
     NSData *patch = [NSData dataWithContentsOfFile:patchPath];
     if (!rom || !patch) {
-        if (error) *error = @"Não consegui ler a ROM ou o patch.";
+        if (error) *error = @"Could not read the ROM or the patch.";
         return nil;
     }
     uint8_t *out = NULL;
@@ -203,16 +203,16 @@ static int16_t rf_input_state(unsigned port, unsigned device, unsigned index, un
         if (error) {
             switch (r) {
                 case RF_PATCH_WRONG_SOURCE:
-                    *error = [NSString stringWithFormat:@"O patch %@ foi feito para outra versão desta ROM (a assinatura CRC não bate). Use a ROM original indicada na página do hack.", patchPath.lastPathComponent];
+                    *error = [NSString stringWithFormat:@"The patch %@ was made for a different version of this ROM (the CRC does not match). Use the original ROM listed on the hack's page.", patchPath.lastPathComponent];
                     break;
                 case RF_PATCH_UNKNOWN_FORMAT:
-                    *error = [NSString stringWithFormat:@"%@ não é um patch IPS nem BPS.", patchPath.lastPathComponent];
+                    *error = [NSString stringWithFormat:@"%@ is not an IPS or BPS patch.", patchPath.lastPathComponent];
                     break;
                 case RF_PATCH_NO_MEMORY:
-                    *error = @"Memória insuficiente para aplicar o patch.";
+                    *error = @"Not enough memory to apply the patch.";
                     break;
                 default:
-                    *error = [NSString stringWithFormat:@"O patch %@ parece estar danificado.", patchPath.lastPathComponent];
+                    *error = [NSString stringWithFormat:@"The patch %@ seems to be damaged.", patchPath.lastPathComponent];
                     break;
             }
         }
@@ -223,7 +223,7 @@ static int16_t rf_input_state(unsigned port, unsigned device, unsigned index, un
     NSString *dest = [dir stringByAppendingPathComponent:romPath.lastPathComponent];
     NSData *data = [NSData dataWithBytesNoCopy:out length:outLen freeWhenDone:YES];
     if (![data writeToFile:dest atomically:YES]) {
-        if (error) *error = @"Não consegui gravar a ROM com patch.";
+        if (error) *error = @"Could not write the patched ROM.";
         return nil;
     }
     return dest;
@@ -247,7 +247,7 @@ static int16_t rf_input_state(unsigned port, unsigned device, unsigned index, un
     memset(&info, 0, sizeof(info));
     info.path = path.fileSystemRepresentation;
     if (!retro_load_game(&info)) {
-        if (error) *error = @"O core não conseguiu carregar este arquivo.";
+        if (error) *error = @"The emulator core could not load this file.";
         return NO;
     }
 

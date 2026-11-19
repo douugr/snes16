@@ -1,51 +1,55 @@
 # SNES16
 
-Emulador de **Super Nintendo** feito para um **iPad antigo com iOS 8**. Foi testado num iPad 3 (A5X, armv7) com iOS 8.4.1 e jailbreak.
+**Super Nintendo** emulator made for an **old iPad with iOS 8**. Tested on an iPad 3 (A5X, armv7) running iOS 8.4.1 with a jailbreak.
 
-É o irmão do [MD16](https://github.com/douugr/md16): o mesmo frontend libretro em Objective-C/UIKit, agora com o core [Snes9x 2005](https://github.com/libretro/snes9x2005) compilado junto no app. O Snes9x 2005 é uma versão antiga e leve do Snes9x, a que melhor cabe num processador de 2012.
+It is the sibling of [MD16](https://github.com/douugr/md16): the same libretro frontend in Objective-C/UIKit, this time with the [Snes9x 2005](https://github.com/libretro/snes9x2005) core built into the app. Snes9x 2005 is an older, lighter Snes9x that fits a 2012 processor best.
 
-## Funcionalidades
+## Install
 
-- Vídeo em OpenGL ES 2 (RGB565, até 512×512 nos modos de alta resolução)
-- Áudio por RemoteIO, com o ritmo do jogo guiado pela fila de som
-- Controle na tela no formato do controle do console: direcional, A/B/X/Y em losango, L/R nos cantos de cima e Select/Start embaixo
-- **Controle Bluetooth** (testado com o 8BitDo Pro 2) pelo BTstack, com assistente que aprende os botões, direcional digital e analógico, e reconexão automática
-- **Envio de ROMs pelo navegador:** a tela "Enviar ROMs" mostra um endereço (`http://<ip-do-ipad>:8080`); no computador é só arrastar os arquivos
-- **Patch automático IPS/BPS** com o mesmo nome da ROM. Se a ROM tem os 512 bytes de cabeçalho de copiadora, o patch é aplicado na ROM sem cabeçalho, que é o caso mais comum
-- Estados salvos em 3 slots manuais, salvamento automático ao sair e "Continuar de onde parou?"
-- SRAM (saves internos do cartucho) gravada automaticamente
-- Run-ahead de 1 quadro (opcional, desligado por padrão: o core de SNES é mais pesado)
-- Medidor de desempenho opcional
-- Visual inspirado no console e nos cartuchos da época: cinza claro com frisos, roxo e lilás. A biblioteca mostra os jogos como cartuchos com etiqueta. O ícone é original
+Add the Cydia repository **https://douugr.github.io/repo/** (Cydia or Melder → Sources → Edit → Add) and install **SNES16**. The BTstack package is installed with it.
 
-## Requisitos
+## Features
 
-- iPad com iOS 8 e jailbreak, com **OpenSSH** e **BTstack** (pacote Cydia `ch.ringwald.btstack` 1.1)
-- Mac com o **Xcode 13.4.1** extraído (só o toolchain é usado) e `ldid`
-- Acesso SSH ao iPad como root, de preferência com chave
+- OpenGL ES 2 video (RGB565, up to 512×512 in hi-res modes)
+- RemoteIO audio, with game pacing driven by the audio queue
+- On-screen controls shaped like the console's pad: D-pad, A/B/X/Y diamond, L/R in the top corners and Select/Start at the bottom
+- **Bluetooth controller** (tested with the 8BitDo Pro 2) via BTstack, with a button setup assistant, D-pad and analog stick, and automatic reconnection
+- **Upload ROMs from a browser:** the "Upload ROMs" screen shows an address (`http://<ipad-ip>:8080`); on your computer, just drag the files in
+- **Automatic IPS/BPS patching** for a patch with the same name as the ROM. If the ROM has a 512-byte copier header, the patch is applied to the headerless ROM, which is the common case
+- 3 manual save-state slots, autosave on exit and "Continue where you left off?"
+- SRAM (cartridge saves) written automatically
+- Optional 1-frame run-ahead (off by default: the SNES core is heavier)
+- Optional performance overlay
+- Visuals inspired by the console and cartridges of the era: light grey with ridges, purple and lilac; the library shows games as labelled cartridges. The icon is original
 
-O app é instalado em `/Applications`, fora do sandbox, para poder falar com o BTdaemon.
+## Requirements (to build)
 
-## Compilar e instalar
+- Jailbroken iPad on iOS 8 with **OpenSSH** and **BTstack** (Cydia package `ch.ringwald.btstack` 1.1)
+- Mac with **Xcode 13.4.1** extracted (only the toolchain is used) and `ldid`
+- SSH access to the iPad as root, ideally with a key
+
+The app is installed in `/Applications`, outside the sandbox, so it can talk to BTdaemon.
+
+## Build and install
 
 ```bash
-export X13=/caminho/para/Xcode-13.4.1.app/Contents/Developer   # padrão: ../Xcode-13.4.1.app
+export X13=/path/to/Xcode-13.4.1.app/Contents/Developer   # default: ../Xcode-13.4.1.app
 export IPAD=192.168.x.x
 
-./build.sh            # compila build/SNES16.app
-./build.sh install    # compila e instala no iPad via SSH
-./build.sh roms       # envia as ROMs de ../roms para o iPad
+./build.sh            # builds build/SNES16.app
+./build.sh install    # builds and installs on the iPad over SSH
+./build.sh roms       # sends the ROMs in ../roms to the iPad
 ```
 
-Na primeira vez, o `build.sh` baixa o Snes9x 2005 num commit fixo e compila o core.
+The first time, `build.sh` downloads Snes9x 2005 (pinned commit) and builds the core.
 
-## Uso
+## Usage
 
-- As ROMs (`.sfc`, `.smc`, `.swc`, `.fig`) ficam em `Documents/SNES16/roms`. Mande pela tela **Enviar ROMs**. Você precisa ter as suas próprias: nenhuma ROM acompanha este projeto.
-- **Controle:** deixe o Bluetooth do iOS desligado e o Wi-Fi ligado (no iPad 3 eles dividem o chip). Depois vá em Controle → Procurar controles → toque no controle → Configurar botões.
+- ROMs (`.sfc`, `.smc`, `.swc`, `.fig`) live in `Documents/SNES16/roms`. Send them with **Upload ROMs**. You need your own: no ROMs come with this project.
+- **Controller:** keep iOS Bluetooth off and Wi-Fi on (on the iPad 3 they share the chip). Then Controller → Search for controllers → tap your controller → Set up buttons.
 
-## Licenças
+## Licenses
 
-- O código deste repositório é do autor. O ícone é original, feito para o projeto.
-- O **Snes9x 2005** não é incluído aqui: ele é baixado na hora de compilar e segue a licença do Snes9x, de uso **não comercial**.
-- Os headers em `vendor/btstack` são do BTstack (© BlueKitchen GmbH / Matthias Ringwald) e seguem a licença do BTstack.
+- The code in this repository is the author's. The icon is original, made for the project.
+- **Snes9x 2005** is not included here: it is downloaded at build time and follows the Snes9x license, which is **non-commercial**.
+- The headers in `vendor/btstack` are from BTstack (© BlueKitchen GmbH / Matthias Ringwald) and follow the BTstack license.
