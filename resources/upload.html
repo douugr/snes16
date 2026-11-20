@@ -83,7 +83,7 @@ function esc(s) { return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":
 
 async function refresh() {
   try {
-    const r = await fetch("/api/list", {cache: "no-store"});
+    const r = await fetch("api/list", {cache: "no-store"});
     const data = await r.json();
     const names = new Set(data.files.map(f => f.name.replace(/\.[^.]+$/, "").toLowerCase() + "|" + ext(f.name)));
     if (!data.files.length) { filesEl.innerHTML = '<tr><td class="empty">No files yet.</td></tr>'; return; }
@@ -97,7 +97,7 @@ async function refresh() {
       tr.innerHTML = `<td>${esc(f.name)}${tag}</td><td class="size">${fmtSize(f.size)}</td><td class="act"><button>Delete</button></td>`;
       tr.querySelector("button").onclick = async () => {
         if (!confirm(`Delete ${f.name} from the iPad?`)) return;
-        await fetch("/api/delete?name=" + encodeURIComponent(f.name), {method: "POST"});
+        await fetch("api/delete?name=" + encodeURIComponent(f.name), {method: "POST"});
         refresh();
       };
       filesEl.appendChild(tr);
@@ -116,7 +116,7 @@ function upload(file) {
     const bar = row.querySelector("i"), status = row.querySelector(".s");
     if (!ACCEPT.includes(ext(file.name))) { status.textContent = "skipped"; resolve(); return; }
     const xhr = new XMLHttpRequest();
-    xhr.open("PUT", "/api/upload?name=" + encodeURIComponent(file.name));
+    xhr.open("PUT", "api/upload?name=" + encodeURIComponent(file.name));
     xhr.upload.onprogress = e => { if (e.lengthComputable) { const p = Math.round(e.loaded / e.total * 100); bar.style.width = p + "%"; status.textContent = p + "%"; } };
     xhr.onload = () => {
       let ok = false, msg = "error";

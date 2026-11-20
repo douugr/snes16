@@ -13,6 +13,7 @@
 #include <ifaddrs.h>
 #include <net/if.h>
 #include <unistd.h>
+#include <dns_sd.h>
 
 #define RF_MAX_HEADER 16384
 #define RF_MAX_UPLOAD (128u * 1024 * 1024)
@@ -22,6 +23,11 @@
 @property (nonatomic, readwrite) uint16_t port;
 @property (nonatomic, copy) NSString *romsDir;
 @property (nonatomic, assign) int listenFd;
+@property (nonatomic, readwrite, copy) NSString *accessCode;
+@property (nonatomic, readwrite, copy) NSString *hostName;
+@property (nonatomic, copy) NSString *pendingName;
+@property (nonatomic, assign) int nameAttempt;
+@property (nonatomic, assign) DNSServiceRef dnsRef;
 @end
 
 @implementation RFWebServer
@@ -79,7 +85,10 @@
     }
     self.listenFd = fd;
     self.port = port;
+    self.accessCode = [RFWebServer newAccessCode];
     self.running = YES;
+    self.nameAttempt = 1;
+    [self registerName];
     NSThread *t = [[NSThread alloc] initWithTarget:self selector:@selector(acceptLoop:) object:@(fd)];
     t.name = @"SNES16.WebServer";
     [t start];
@@ -89,9 +98,70 @@
 - (void)stop {
     if (!self.running) return;
     self.running = NO;
+    if (self.dnsRef) {
+        DNSServiceRefDeallocate(self.dnsRef);
+        self.dnsRef = NULL;
+    }
+    self.hostName = nil;
     shutdown(self.listenFd, SHUT_RDWR);
     close(self.listenFd);
     self.listenFd = -1;
+}
+
+// 5 letras/números fáceis de ler (sem 0/o, 1/l/i)
++ (NSString *)newAccessCode {
+    static const char alphabet[] = "abcdefghjkmnpqrstuvwxyz23456789";
+    char code[6];
+    for (int i = 0; i < 5; i++) code[i] = alphabet[arc4random_uniform((uint32_t)(sizeof(alphabet) - 1))];
+    code[5] = 0;
+    return [NSString stringWithUTF8String:code];
+}
+
+#pragma mark Nome na rede (Bonjour / mDNS)
+
+static void rf_record_registered(DNSServiceRef ref, DNSRecordRef rec, DNSServiceFlags flags, DNSServiceErrorType err, void *ctx) {
+    [(__bridge RFWebServer *)ctx recordRegistered:err];
+}
+
+// Anuncia "<app>.local" apontando para o IP do Wi-Fi; se outro aparelho já usa o nome, tenta <app>-2, -3...
+- (void)registerName {
+    if (self.dnsRef) {
+        DNSServiceRefDeallocate(self.dnsRef);
+        self.dnsRef = NULL;
+    }
+    NSString *ip = [RFWebServer localIPAddress];
+    if (!ip) return;
+    struct in_addr a;
+    if (inet_pton(AF_INET, ip.UTF8String, &a) != 1) return;
+    NSString *base = [[[NSBundle mainBundle] objectForInfoDictionaryKey:@"CFBundleName"] lowercaseString] ?: @"ipad";
+    NSString *name = self.nameAttempt > 1 ? [NSString stringWithFormat:@"%@-%d.local.", base, self.nameAttempt]
+                                          : [base stringByAppendingString:@".local."];
+    DNSServiceRef ref = NULL;
+    if (DNSServiceCreateConnection(&ref) != kDNSServiceErr_NoError) return;
+    DNSRecordRef rec = NULL;
+    DNSServiceErrorType e = DNSServiceRegisterRecord(ref, &rec, kDNSServiceFlagsUnique, if_nametoindex("en0"),
+                                                     name.UTF8String, kDNSServiceType_A, kDNSServiceClass_IN,
+                                                     sizeof(a), &a, 120, rf_record_registered, (__bridge void *)self);
+    if (e != kDNSServiceErr_NoError) {
+        DNSServiceRefDeallocate(ref);
+        return;
+    }
+    DNSServiceSetDispatchQueue(ref, dispatch_get_main_queue());
+    self.dnsRef = ref;
+    self.pendingName = [name substringToIndex:name.length - 1];
+}
+
+- (void)recordRegistered:(DNSServiceErrorType)err {
+    if (!self.running) return;
+    if (err == kDNSServiceErr_NameConflict && self.nameAttempt < 9) {
+        self.nameAttempt++;
+        [self registerName];
+        return;
+    }
+    if (err == kDNSServiceErr_NoError) {
+        self.hostName = self.pendingName;
+        if (self.onNameChange) self.onNameChange();
+    }
 }
 
 - (void)acceptLoop:(NSNumber *)fdNumber {
@@ -122,11 +192,17 @@ static BOOL rf_send_all(int fd, const void *data, size_t len) {
 }
 
 static void rf_respond(int fd, int status, NSString *type, NSData *body) {
-    NSString *reason = status == 200 ? @"OK" : status == 400 ? @"Bad Request" : status == 404 ? @"Not Found" : status == 413 ? @"Payload Too Large" : @"Error";
+    NSString *reason = status == 200 ? @"OK" : status == 403 ? @"Forbidden" : status == 400 ? @"Bad Request" : status == 404 ? @"Not Found" : status == 413 ? @"Payload Too Large" : @"Error";
     NSString *head = [NSString stringWithFormat:@"HTTP/1.1 %d %@\r\nContent-Type: %@\r\nContent-Length: %lu\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n",
                       status, reason, type, (unsigned long)body.length];
     NSData *h = [head dataUsingEncoding:NSUTF8StringEncoding];
     if (rf_send_all(fd, h.bytes, h.length) && body.length) rf_send_all(fd, body.bytes, body.length);
+}
+
+static void rf_redirect(int fd, NSString *location) {
+    NSString *head = [NSString stringWithFormat:@"HTTP/1.1 301 Moved Permanently\r\nLocation: %@\r\nContent-Length: 0\r\nConnection: close\r\n\r\n", location];
+    NSData *h = [head dataUsingEncoding:NSUTF8StringEncoding];
+    rf_send_all(fd, h.bytes, h.length);
 }
 
 static void rf_respond_json(int fd, int status, id object) {
@@ -198,6 +274,23 @@ static void rf_respond_error(int fd, int status, NSString *message) {
         path = [target substringToIndex:q.location];
         query = [target substringFromIndex:q.location + 1];
     }
+    // Tudo fica sob /<código>/: sem o código certo (que só aparece na tela do iPad), nada responde
+    NSString *prefix = [@"/" stringByAppendingString:self.accessCode ?: @"-"];
+    if ([path isEqualToString:prefix]) {
+        rf_redirect(fd, [prefix stringByAppendingString:@"/"]);
+        free(buf);
+        return;
+    }
+    if (![path hasPrefix:[prefix stringByAppendingString:@"/"]]) {
+        NSString *page = @"<!DOCTYPE html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                         @"<body style='font:17px -apple-system,Helvetica,sans-serif;padding:40px;text-align:center'>"
+                         @"<h2>Wrong or expired address</h2><p>Open the upload screen on the iPad and use the address shown there. "
+                         @"The code at the end changes every time the screen opens.</p></body>";
+        rf_respond(fd, 403, @"text/html; charset=utf-8", [page dataUsingEncoding:NSUTF8StringEncoding]);
+        free(buf);
+        return;
+    }
+    path = [path substringFromIndex:prefix.length];
     unsigned long long contentLength = 0;
     for (NSString *line in lines) {
         if ([line.lowercaseString hasPrefix:@"content-length:"]) {

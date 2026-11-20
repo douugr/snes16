@@ -153,7 +153,12 @@ NSString *RFActionName(RFAction action);
 - (void)stop;
 @property (nonatomic, readonly) BOOL running;
 @property (nonatomic, readonly) uint16_t port;
-@property (nonatomic, copy) void (^onChange)(void);   // chamado na thread principal quando chega/sai um arquivo
+@property (nonatomic, copy) void (^onChange)(void);
+// Parte secreta do endereço (muda a cada vez que o servidor liga): http://<ipad>:<porta>/<código>/
+@property (nonatomic, readonly, copy) NSString *accessCode;
+// Nome na rede local anunciado por Bonjour (ex.: "psx32.local"); nil até o registro terminar
+@property (nonatomic, readonly, copy) NSString *hostName;
+@property (nonatomic, copy) void (^onNameChange)(void);   // thread principal   // chamado na thread principal quando chega/sai um arquivo
 @end
 
 // Tema visual (RFTheme.m): grade cinza sobre preto, cromado, vermelho e faixas diagonais

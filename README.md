@@ -14,7 +14,7 @@ Add the Cydia repository **https://douugr.github.io/repo/** (Cydia or Melder →
 - RemoteIO audio, with game pacing driven by the audio queue
 - On-screen controls shaped like the console's pad: D-pad, A/B/X/Y diamond, L/R in the top corners and Select/Start at the bottom
 - **Bluetooth controller** (tested with the 8BitDo Pro 2) via BTstack, with a button setup assistant, D-pad and analog stick, and automatic reconnection
-- **Upload ROMs from a browser:** the "Upload ROMs" screen shows an address (`http://<ipad-ip>:8080`); on your computer, just drag the files in
+- **Upload ROMs from a browser:** the "Upload ROMs" screen shows an address (`http://snes16.local:8716/<code>/`, with the IP version below it and a QR code to upload from a phone). The code at the end is random and changes every time the screen opens, so nobody else on the network can reach the page;; on your computer, just drag the files in
 - **Automatic IPS/BPS patching** for a patch with the same name as the ROM. If the ROM has a 512-byte copier header, the patch is applied to the headerless ROM, which is the common case
 - 3 manual save-state slots, autosave on exit and "Continue where you left off?"
 - SRAM (cartridge saves) written automatically
@@ -50,6 +50,7 @@ The first time, `build.sh` downloads Snes9x 2005 (pinned commit) and builds the 
 
 ## Licenses
 
-- The code in this repository is the author's. The icon is original, made for the project.
+- The code in this repository is released under the **MIT License** (see [LICENSE](LICENSE)). The icon is original, made for the project.
 - **Snes9x 2005** is not included here: it is downloaded at build time and follows the Snes9x license, which is **non-commercial**.
+- The packaged app (the `.deb` on the Cydia repo) is linked with Snes9x 2005, so the whole binary is also bound by that non-commercial license.
 - The headers in `vendor/btstack` are from BTstack (© BlueKitchen GmbH / Matthias Ringwald) and follow the BTstack license.

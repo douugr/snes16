@@ -1,5 +1,6 @@
 #import "RF.h"
 #import <QuartzCore/QuartzCore.h>
+#import <CoreImage/CoreImage.h>
 
 static UIColor *RFAccent(void) {
     return RFThemeRed();
@@ -631,11 +632,38 @@ typedef struct {
 
 @interface RFUploadViewController : UIViewController
 @property (nonatomic, strong) UILabel *addressLabel;
+@property (nonatomic, strong) UILabel *ipLabel;
+@property (nonatomic, strong) UIImageView *qrView;
 @property (nonatomic, strong) UILabel *infoLabel;
 @property (nonatomic, assign) NSInteger received;
 @end
 
 @implementation RFUploadViewController
+
+// QR code (CoreImage) ampliado sem suavizar, com margem branca
+static UIImage *RFQRCode(NSString *text, CGFloat side) {
+    CIFilter *f = [CIFilter filterWithName:@"CIQRCodeGenerator"];
+    [f setValue:[text dataUsingEncoding:NSUTF8StringEncoding] forKey:@"inputMessage"];
+    [f setValue:@"M" forKey:@"inputCorrectionLevel"];
+    CIImage *ci = f.outputImage;
+    if (!ci) return nil;
+    CIContext *ctx = [CIContext contextWithOptions:nil];
+    CGImageRef cg = [ctx createCGImage:ci fromRect:ci.extent];
+    if (!cg) return nil;
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(side, side), YES, 0);
+    CGContextRef g = UIGraphicsGetCurrentContext();
+    [[UIColor whiteColor] setFill];
+    CGContextFillRect(g, CGRectMake(0, 0, side, side));
+    CGContextSetInterpolationQuality(g, kCGInterpolationNone);
+    CGFloat m = side * 0.08;
+    CGContextTranslateCTM(g, 0, side);
+    CGContextScaleCTM(g, 1, -1);
+    CGContextDrawImage(g, CGRectMake(m, m, side - 2 * m, side - 2 * m), cg);
+    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    CGImageRelease(cg);
+    return img;
+}
 
 - (void)viewDidLoad {
     [super viewDidLoad];
@@ -663,6 +691,19 @@ typedef struct {
     self.addressLabel.adjustsFontSizeToFitWidth = YES;
     [self.view addSubview:self.addressLabel];
 
+    self.ipLabel = [[UILabel alloc] init];
+    self.ipLabel.textAlignment = NSTextAlignmentCenter;
+    self.ipLabel.font = [UIFont fontWithName:@"Menlo" size:15] ?: [UIFont systemFontOfSize:15];
+    self.ipLabel.textColor = RFThemeDim();
+    self.ipLabel.adjustsFontSizeToFitWidth = YES;
+    [self.view addSubview:self.ipLabel];
+
+    self.qrView = [[UIImageView alloc] init];
+    self.qrView.layer.magnificationFilter = kCAFilterNearest;
+    self.qrView.layer.cornerRadius = 6;
+    self.qrView.clipsToBounds = YES;
+    [self.view addSubview:self.qrView];
+
     self.infoLabel = [[UILabel alloc] init];
     self.infoLabel.numberOfLines = 0;
     self.infoLabel.textAlignment = NSTextAlignmentCenter;
@@ -678,7 +719,10 @@ typedef struct {
     CGFloat y = self.topLayoutGuide.length + 50;
     [self.view viewWithTag:1].frame = CGRectMake(x, y, w, 50);
     self.addressLabel.frame = CGRectMake(x, y + 60, w, 64);
-    self.infoLabel.frame = CGRectMake(x, y + 140, w, 200);
+    self.ipLabel.frame = CGRectMake(x, y + 130, w, 22);
+    CGFloat q = 180;
+    self.qrView.frame = CGRectMake(floor((self.view.bounds.size.width - q) / 2), y + 164, q, q);
+    self.infoLabel.frame = CGRectMake(x, y + 164 + q + 10, w, 200);
 }
 
 - (void)viewWillAppear:(BOOL)animated {
@@ -689,6 +733,7 @@ typedef struct {
         weakSelf.received++;
         [weakSelf updateInfo];
     };
+    server.onNameChange = ^{ [weakSelf updateAddress]; };
     NSString *ip = [RFWebServer localIPAddress];
     NSString *error = nil;
     if (!ip) {
@@ -696,19 +741,36 @@ typedef struct {
         self.infoLabel.text = @"Connect the iPad to a Wi-Fi network and open this screen again.";
         return;
     }
-    if (![server startOnPort:8080 error:&error]) {
+    if (![server startOnPort:8716 error:&error]) {
         self.addressLabel.text = @"Error";
         self.infoLabel.text = error;
         return;
     }
-    self.addressLabel.text = [NSString stringWithFormat:@"http://%@:%u", ip, server.port];
+    [self updateAddress];
     [self updateInfo];
+}
+
+// Endereço com nome (.local) em destaque e com IP embaixo; o QR code usa o IP, que todo celular entende
+- (void)updateAddress {
+    RFWebServer *server = [RFWebServer shared];
+    NSString *ip = [RFWebServer localIPAddress];
+    if (!ip || !server.running) return;
+    NSString *ipURL = [NSString stringWithFormat:@"http://%@:%u/%@/", ip, server.port, server.accessCode];
+    if (server.hostName) {
+        self.addressLabel.text = [NSString stringWithFormat:@"http://%@:%u/%@/", server.hostName, server.port, server.accessCode];
+        self.ipLabel.text = [@"or " stringByAppendingString:ipURL];
+    } else {
+        self.addressLabel.text = ipURL;
+        self.ipLabel.text = nil;
+    }
+    self.qrView.image = RFQRCode(ipURL, 180);
 }
 
 - (void)updateInfo {
     NSString *base = @"Drag your ROMs (and .ips/.bps patches) onto the page.\n"
                      @"A patch with the same name as the ROM is applied automatically when the game starts.\n\n"
                      @"Uploading only works while this screen is open.";
+    base = [@"Scan the code with a phone to upload from it. The address changes every time this screen opens.\n\n" stringByAppendingString:base];
     self.infoLabel.text = self.received ? [NSString stringWithFormat:@"%@\n\nChanges received: %ld", base, (long)self.received] : base;
 }
 
@@ -716,6 +778,7 @@ typedef struct {
     [super viewWillDisappear:animated];
     [[RFWebServer shared] stop];
     [RFWebServer shared].onChange = nil;
+    [RFWebServer shared].onNameChange = nil;
 }
 
 @end
