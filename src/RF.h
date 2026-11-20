@@ -86,6 +86,8 @@ void RFAppendLog(NSString *file, NSString *line);
 
 @interface RFGLView : UIView
 @property (nonatomic, assign) BOOL smooth;
+// 0 pixels nítidos, 1 suave, 2 TV de tubo (CRT), 3 CRT com tela curva
+@property (nonatomic, assign) NSInteger filterMode;
 - (void)drawFrame;   // envia o último quadro do core para a tela
 @end
 

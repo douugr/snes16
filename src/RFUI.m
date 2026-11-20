@@ -62,7 +62,8 @@ typedef struct {
     self.view.backgroundColor = [UIColor blackColor];
 
     self.video = [[RFGLView alloc] initWithFrame:CGRectZero];
-    self.video.smooth = [[NSUserDefaults standardUserDefaults] boolForKey:@"RFSmooth"];
+    NSNumber *filterPref = [[NSUserDefaults standardUserDefaults] objectForKey:@"RFFilter"];
+    self.video.filterMode = filterPref ? filterPref.integerValue : [[NSUserDefaults standardUserDefaults] boolForKey:@"RFSmooth"];
     [self.view addSubview:self.video];
 
     self.pad = [[RFTouchPad alloc] initWithFrame:self.view.bounds];
@@ -403,11 +404,11 @@ typedef struct {
         weakSelf.pad.controlsHidden = !show;
         [weakSelf resume];
     }]];
-    NSString *filterTitle = self.video.smooth ? @"Image: sharp (pixels)" : @"Image: smooth";
-    [sheet addAction:[UIAlertAction actionWithTitle:filterTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        weakSelf.video.smooth = !weakSelf.video.smooth;
-        [[NSUserDefaults standardUserDefaults] setBool:weakSelf.video.smooth forKey:@"RFSmooth"];
-        [weakSelf resume];
+    NSArray *filterNames = @[@"sharp pixels", @"smooth", @"CRT TV", @"CRT TV, curved"];
+    NSInteger fm = MAX(0, MIN(3, self.video.filterMode));
+    [sheet addAction:[UIAlertAction actionWithTitle:[NSString stringWithFormat:@"Image: %@…", filterNames[fm]]
+                                              style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ [weakSelf showFilters]; });
     }]];
     NSString *aheadTitle = [self runAheadEnabled] ? @"Reduce input lag (run-ahead): on" : @"Reduce input lag (run-ahead): off";
     [sheet addAction:[UIAlertAction actionWithTitle:aheadTitle style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
@@ -424,6 +425,28 @@ typedef struct {
         [weakSelf quit];
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction *a) {
+        [weakSelf resume];
+    }]];
+    sheet.popoverPresentationController.sourceView = self.pad;
+    sheet.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width - 60, 10, 50, 50);
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+// Modos de imagem: pixels, suave, TV de tubo e TV de tubo com tela curva
+- (void)showFilters {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Image" message:nil
+                                                            preferredStyle:UIAlertControllerStyleActionSheet];
+    __weak RFGameViewController *weakSelf = self;
+    NSArray *names = @[@"Sharp pixels", @"Smooth", @"CRT TV (scanlines and phosphor mask)", @"CRT TV with a curved screen"];
+    for (NSInteger i = 0; i < 4; i++) {
+        NSString *title = i == self.video.filterMode ? [names[i] stringByAppendingString:@"  ✓"] : names[i];
+        [sheet addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            weakSelf.video.filterMode = i;
+            [[NSUserDefaults standardUserDefaults] setInteger:i forKey:@"RFFilter"];
+            [weakSelf resume];
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Back" style:UIAlertActionStyleCancel handler:^(UIAlertAction *a) {
         [weakSelf resume];
     }]];
     sheet.popoverPresentationController.sourceView = self.pad;

@@ -11,6 +11,7 @@ Add the Cydia repository **https://douugr.github.io/repo/** (Cydia or Melder →
 ## Features
 
 - OpenGL ES 2 video (RGB565, up to 512×512 in hi-res modes)
+- **CRT TV filter** (game menu → "Image…"): scanlines that widen on bright colors, a phosphor mask, composite-video blending (color bleeds more than brightness, so dithering turns into the smooth gradients and transparencies artists drew for TVs) and an optional gently curved screen that still fills the display. Runs at 60 fps on an iPad 3
 - RemoteIO audio, with game pacing driven by the audio queue
 - On-screen controls shaped like the console's pad: D-pad, A/B/X/Y diamond, L/R in the top corners and Select/Start at the bottom
 - **Bluetooth controller** (tested with the 8BitDo Pro 2) via BTstack, with a button setup assistant, D-pad and analog stick, and automatic reconnection
