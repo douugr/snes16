@@ -76,6 +76,28 @@ if [ ! -f "$CORE_LIB" ]; then
     echo "==> Core: $(ls "$OBJDIR"/*.o | wc -l | tr -d ' ') arquivos objeto"
 fi
 
+# --- rcheevos (RetroAchievements), MIT ---
+RC_REPO=https://github.com/RetroAchievements/rcheevos.git
+RC_TAG=v12.5.0
+if [ ! -d core/rcheevos/.git ]; then
+    echo "==> Downloading rcheevos ($RC_TAG)"
+    mkdir -p core
+    git clone -q --depth 1 --branch "$RC_TAG" "$RC_REPO" core/rcheevos
+fi
+RC_LIB="$PWD/build-ra/librcheevos.a"
+if [ ! -f "$RC_LIB" ]; then
+    echo "==> Building rcheevos"
+    mkdir -p build-ra
+    for f in core/rcheevos/src/*.c core/rcheevos/src/rapi/*.c core/rcheevos/src/rcheevos/*.c core/rcheevos/src/rhash/*.c; do
+        case "$f" in *hash_encrypted.c) continue;; esac
+        "$TC/clang" -arch armv7 -isysroot "$SDK" -miphoneos-version-min=8.0 -O2 -w \
+            -DRC_CLIENT_SUPPORTS_HASH -DRC_HASH_NO_ENCRYPTED -DRC_HASH_NO_ZIP \
+            -Icore/rcheevos/include -Icore/s9x/libretro-common/include \
+            -c "$f" -o "build-ra/$(echo "$f" | tr / _).o"
+    done
+    "$TC/libtool" -static -o "$RC_LIB" build-ra/*.o 2>/dev/null
+fi
+
 # --- App ---
 OUT="build/$APP.app"
 rm -rf build && mkdir -p "$OUT"
@@ -83,13 +105,15 @@ echo "==> Compilando o app (armv7, iOS 8.0)"
 "$TC/clang" -arch armv7 -isysroot "$SDK" -miphoneos-version-min=8.0 -B "$TC" \
     -fobjc-arc -O2 -Wall -Wno-unused-parameter -Wunguarded-availability \
     -I src -I vendor/btstack -I core/s9x/libretro-common/include \
-    src/*.m src/*.c "$CORE_LIB" -o "$OUT/$APP" \
+    -I core/rcheevos/include -I core/rcheevos/src -DRC_CLIENT_SUPPORTS_HASH \
+    src/*.m src/*.c "$CORE_LIB" "$RC_LIB" -o "$OUT/$APP" \
     -L vendor -lBTstackLink \
     -framework Foundation -framework UIKit -framework CoreGraphics -framework QuartzCore \
-    -framework GLKit -framework OpenGLES -framework AudioToolbox -framework AVFoundation -framework CoreImage
+    -framework GLKit -framework OpenGLES -framework AudioToolbox -framework AVFoundation -framework CoreImage -framework Security
 
 cp Info.plist "$OUT/"
 cp resources/*.png resources/*.html "$OUT/"
+cp resources/*.der "$OUT/" 2>/dev/null || true   # extra root certificates for RetroAchievements HTTPS
 if command -v ldid >/dev/null 2>&1; then ldid -S "$OUT/$APP"; else codesign -f -s - "$OUT/$APP"; fi
 lipo -info "$OUT/$APP"
 echo "==> OK: $OUT ($(du -sh "$OUT" | cut -f1))"

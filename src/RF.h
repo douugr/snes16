@@ -163,6 +163,64 @@ NSString *RFActionName(RFAction action);
 @property (nonatomic, copy) void (^onNameChange)(void);   // thread principal   // chamado na thread principal quando chega/sai um arquivo
 @end
 
+// RetroAchievements (RFAchievements.m): conquistas via rcheevos, por enquanto só no modo Casual
+extern NSString *const RFAchievementsChanged;   // notificação: login, jogo identificado ou conquista nova
+struct retro_memory_map;
+void RFAchievementsSetMemoryMap(const struct retro_memory_map *map);
+
+@interface RFAchievements : NSObject
++ (instancetype)shared;
+@property (nonatomic, readonly) BOOL loggedIn;
+@property (nonatomic, readonly, copy) NSString *userName;
+@property (nonatomic, readonly) uint32_t score;
+@property (nonatomic, readonly, copy) NSString *status;      // "Signing in…" ou o último erro
+@property (nonatomic, readonly, copy) NSString *gameTitle;   // nome do jogo no RetroAchievements
+@property (nonatomic, copy) NSString *pendingPath;
+@property (nonatomic, assign) uint32_t pendingConsole;
+@property (nonatomic, assign) BOOL patchedGame;
+- (void)start;   // na abertura do app: entra com o token salvo
+- (void)loginWithUser:(NSString *)user password:(NSString *)password completion:(void (^)(NSString *error))completion;
+- (void)logout;
+- (void)gameLoadedAtPath:(NSString *)path console:(uint32_t)console patched:(BOOL)patched;
+- (void)gameUnloaded;
+- (void)changeMediaToPath:(NSString *)path;   // jogo de vários discos: disco novo inserido
+- (BOOL)gameActive;
+- (void)doFrame;   // uma vez por quadro real (não nos quadros previstos do run-ahead)
+- (void)reset;
+- (NSData *)progress;                       // estado das conquistas, salvo junto com o save state
+- (void)restoreProgress:(NSData *)data;     // nil: zera o acompanhamento
+- (NSArray *)achievementSections;
+- (NSString *)gameSummary;
+- (void)imageForURL:(NSString *)url completion:(void (^)(UIImage *image))completion;
+- (void)fetchGame:(uint32_t)gameId completion:(void (^)(NSDictionary *info, NSString *error))completion;
+- (void)fetchMyGames:(void (^)(NSArray *games, NSString *error))completion;
+@end
+
+@interface RFAchievementsAccountViewController : UIViewController
+@end
+
+@interface RFAchievementsListViewController : UITableViewController
+@property (nonatomic, copy) void (^onDone)(void);
+@property (nonatomic, assign) uint32_t gameId;        // 0 = jogo aberto agora; senão busca no site
+@property (nonatomic, copy) NSString *gameTitle;
+@end
+
+// Tela "Achievements" do menu: conta e conquistas por jogo
+@interface RFAchievementsHomeViewController : UITableViewController
+@end
+
+// Consoles deste emulador no RetroAchievements: NSDictionary id/name (definido em RFCore.m)
+NSArray *RFAchievementsConsoles(void);
+uint32_t RFConsoleForPath(NSString *path);
+
+// Menu lateral (RFSideMenu.m). Itens: NSDictionary title, caption, make (bloco que cria a tela), keep (BOOL)
+@interface RFSideMenuController : UIViewController
++ (instancetype)shared;
++ (UIBarButtonItem *)menuButton;
+- (instancetype)initWithItems:(NSArray *)items;
+- (void)showItem:(NSUInteger)index;
+@end
+
 // Tema visual (RFTheme.m): grade cinza sobre preto, cromado, vermelho e faixas diagonais
 UIColor *RFThemeRed(void);
 UIColor *RFThemeLilac(void);

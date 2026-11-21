@@ -12,6 +12,8 @@ Add the Cydia repository **https://douugr.github.io/repo/** (Cydia or Melder →
 
 - OpenGL ES 2 video (RGB565, up to 512×512 in hi-res modes)
 - **CRT TV filter** (game menu → "Image…"): scanlines that widen on bright colors, a phosphor mask, composite-video blending (color bleeds more than brightness, so dithering turns into the smooth gradients and transparencies artists drew for TVs) and an optional gently curved screen that still fills the display. Runs at 60 fps on an iPad 3
+- **RetroAchievements:** sign in with your retroachievements.org account (side menu → Achievements) and unlock achievements while you play, with a pop-up and the badge of each one. The Achievements screen lists your games and their unlocks, and the game menu shows the achievements of the game you are playing. Save states keep the achievement progress. For now unlocks count in Casual mode only (Hardcore needs approval from RetroAchievements), and only original, unmodified games are recognized
+- **Side menu:** Games, Achievements, Upload and Controller live in a drawer (☰ button or swipe from the left edge)
 - RemoteIO audio, with game pacing driven by the audio queue
 - On-screen controls shaped like the console's pad: D-pad, A/B/X/Y diamond, L/R in the top corners and Select/Start at the bottom
 - **Bluetooth controller** (tested with the 8BitDo Pro 2) via BTstack, with a button setup assistant, D-pad and analog stick, and automatic reconnection
@@ -52,6 +54,7 @@ The first time, `build.sh` downloads Snes9x 2005 (pinned commit) and builds the 
 ## Licenses
 
 - The code in this repository is released under the **MIT License** (see [LICENSE](LICENSE)). The icon is original, made for the project.
+- **rcheevos** (RetroAchievements runtime) is © RetroAchievements, MIT License. It is downloaded at build time (tag pinned in `build.sh`).
 - **Snes9x 2005** is not included here: it is downloaded at build time and follows the Snes9x license, which is **non-commercial**.
 - The packaged app (the `.deb` on the Cydia repo) is linked with Snes9x 2005, so the whole binary is also bound by that non-commercial license.
 - The headers in `vendor/btstack` are from BTstack (© BlueKitchen GmbH / Matthias Ringwald) and follow the BTstack license.

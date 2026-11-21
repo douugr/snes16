@@ -1,6 +1,7 @@
 #import "RF.h"
 #include "libretro.h"
 #include "rf_patch.h"
+#include "rc_consoles.h"
 #import <QuartzCore/QuartzCore.h>
 
 volatile uint32_t rf_touch_mask = 0;
@@ -82,6 +83,11 @@ static bool rf_environment(unsigned cmd, void *data) {
             if (av->geometry.aspect_ratio > 0) rf_aspect = av->geometry.aspect_ratio;
             return true;
         }
+        case RETRO_ENVIRONMENT_SET_MEMORY_MAPS:
+            RFAchievementsSetMemoryMap(data);   // RetroAchievements lê a RAM do jogo por este mapa
+            return true;
+        case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
+            return true;
         case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE:
             // bit 0 = vídeo, bit 1 = áudio. Pular o vídeo poupa a renderização do VDP.
             // bit 2 = "estados rápidos" (run-ahead): mantém o som contínuo ao voltar o estado
@@ -132,6 +138,14 @@ static int16_t rf_input_state(unsigned port, unsigned device, unsigned index, un
 @property (nonatomic, assign) BOOL initialized;
 @property (nonatomic, readwrite) BOOL patched;
 @end
+
+uint32_t RFConsoleForPath(NSString *path) {
+    return RC_CONSOLE_SUPER_NINTENDO;
+}
+
+NSArray *RFAchievementsConsoles(void) {
+    return @[ @{ @"id": @(RC_CONSOLE_SUPER_NINTENDO), @"name": @"SNES" } ];
+}
 
 @implementation RFCore
 
@@ -270,6 +284,8 @@ static int16_t rf_input_state(unsigned port, unsigned device, unsigned index, un
     if (sram && mem && size) {
         memcpy(mem, sram.bytes, MIN(size, sram.length));
     }
+    // RetroAchievements identifica o jogo pela ROM original (sem patch)
+    [[RFAchievements shared] gameLoadedAtPath:originalPath console:RFConsoleForPath(originalPath) patched:self.patched];
     return YES;
 }
 
@@ -282,6 +298,7 @@ static int16_t rf_input_state(unsigned port, unsigned device, unsigned index, un
     rf_skip_video = skip;
     retro_run();
     rf_skip_video = false;
+    if (!rf_mute_audio) [[RFAchievements shared] doFrame];   // quadros previstos do run-ahead não contam
 }
 
 static void *rf_ahead_state = NULL;
@@ -320,7 +337,9 @@ static size_t rf_ahead_size = 0;
 }
 
 - (void)reset {
-    if (self.loaded) retro_reset();
+    if (!self.loaded) return;
+    retro_reset();
+    [[RFAchievements shared] reset];
 }
 
 - (void)saveSRAM {
@@ -340,6 +359,7 @@ static size_t rf_ahead_size = 0;
 - (void)unload {
     if (!self.loaded) return;
     [self saveSRAM];
+    [[RFAchievements shared] gameUnloaded];
     retro_unload_game();
     self.loaded = NO;
     rf_frame_data = NULL;
@@ -351,6 +371,11 @@ static size_t rf_ahead_size = 0;
     if (!size) return NO;
     NSMutableData *data = [NSMutableData dataWithLength:size];
     if (!retro_serialize(data.mutableBytes, size)) return NO;
+    // Estado das conquistas junto (para não disparar ou perder conquistas ao carregar)
+    NSString *raPath = [[self statePath:slot] stringByAppendingString:@".ra"];
+    NSData *progress = [[RFAchievements shared] progress];
+    if (progress) [progress writeToFile:raPath atomically:YES];
+    else [[NSFileManager defaultManager] removeItemAtPath:raPath error:nil];
     return [data writeToFile:[self statePath:slot] atomically:YES];
 }
 
@@ -358,7 +383,9 @@ static size_t rf_ahead_size = 0;
     if (!self.loaded) return NO;
     NSData *data = [NSData dataWithContentsOfFile:[self statePath:slot]];
     if (!data) return NO;
-    return retro_unserialize(data.bytes, data.length);
+    if (!retro_unserialize(data.bytes, data.length)) return NO;
+    [[RFAchievements shared] restoreProgress:[NSData dataWithContentsOfFile:[[self statePath:slot] stringByAppendingString:@".ra"]]];
+    return YES;
 }
 
 - (NSDate *)dateForStateSlot:(int)slot {
