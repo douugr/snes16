@@ -253,6 +253,7 @@ void RFQuitWatch(BOOL on);
 // Arquivos de save de um jogo (RFCore.m de cada app): NSDictionary local + folder (pasta no repositório)
 // ou local + shared (caminho fixo no repositório, para o memory card compartilhado do PSX32)
 NSArray *RFCloudSaveFiles(NSString *romPath);
+void RFCloudDidDownload(NSString *localPath);   // um arquivo veio da nuvem (save states: desempacota o .rfst)
 
 // Tema visual (RFTheme.m): grade cinza sobre preto, cromado, vermelho e faixas diagonais
 UIColor *RFThemeRed(void);

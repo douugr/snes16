@@ -187,15 +187,29 @@ void RFQuitWatch(BOOL on) {
     return [remote stringByAddingPercentEncodingWithAllowedCharacters:ok];
 }
 
-// GET do arquivo: completion(sha, conteúdo, status) na thread principal (sha nil = não existe)
-- (void)fetch:(NSString *)remote completion:(void (^)(NSString *sha, NSData *content, NSInteger status))completion {
+// GET do arquivo: completion(sha, conteúdo, status) na thread principal (sha nil = não existe).
+// Arquivos maiores que 1 MB (save states) não vêm no JSON: o conteúdo é baixado à parte, e só se o sha
+// for diferente de knownSha (o que este aparelho já tem)
+- (void)fetch:(NSString *)remote knownSha:(NSString *)knownSha completion:(void (^)(NSString *sha, NSData *content, NSInteger status))completion {
     NSDictionary *c = [self config];
     NSString *p = [NSString stringWithFormat:@"/repos/%@/contents/%@", c[@"repo"], [self encodedPath:remote]];
     [[self.session dataTaskWithRequest:[self requestForPath:p token:c[@"token"]] completionHandler:^(NSData *data, NSURLResponse *response, NSError *e) {
         NSInteger status = e ? -1 : ((NSHTTPURLResponse *)response).statusCode;
         NSDictionary *json = (status == 200 && data) ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
         NSString *sha = json[@"sha"];
-        NSData *content = json[@"content"] ? [[NSData alloc] initWithBase64EncodedString:json[@"content"] options:NSDataBase64DecodingIgnoreUnknownCharacters] : nil;
+        NSString *b64 = json[@"content"];
+        NSData *content = b64.length ? [[NSData alloc] initWithBase64EncodedString:b64 options:NSDataBase64DecodingIgnoreUnknownCharacters] : nil;
+        BOOL big = !content && [json[@"size"] longLongValue] > 0;
+        if (big && ![sha isEqualToString:knownSha ?: @""]) {
+            NSMutableURLRequest *raw = [self requestForPath:p token:c[@"token"]];
+            [raw setValue:@"application/vnd.github.raw" forHTTPHeaderField:@"Accept"];
+            raw.timeoutInterval = 120;
+            [[self.session dataTaskWithRequest:raw completionHandler:^(NSData *d2, NSURLResponse *r2, NSError *e2) {
+                NSInteger st2 = e2 ? -1 : ((NSHTTPURLResponse *)r2).statusCode;
+                dispatch_async(dispatch_get_main_queue(), ^{ completion(st2 == 200 ? sha : nil, st2 == 200 ? d2 : nil, st2 == 200 ? 200 : st2); });
+            }] resume];
+            return;
+        }
         dispatch_async(dispatch_get_main_queue(), ^{ completion(sha, content, status); });
     }] resume];
 }
@@ -285,8 +299,10 @@ static NSString *rf_device(void) {
     }
     NSMutableArray *out = [NSMutableArray array];
     for (NSDictionary *s in RFCloudSaveFiles(romPath)) {
-        NSString *remote = s[@"shared"] ?: [NSString stringWithFormat:@"%@/%@.srm", s[@"folder"], key];
-        [out addObject:@{ @"local": s[@"local"], @"remote": remote, @"name": romPath.lastPathComponent.stringByDeletingPathExtension }];
+        // save states (s[@"suffix"]): <pasta>/states/<impressão digital><suffix>, o mesmo caminho do Switch
+        NSString *remote = s[@"shared"] ?: (s[@"suffix"] ? [NSString stringWithFormat:@"%@/states/%@%@", s[@"folder"], key, s[@"suffix"]]
+                                                         : [NSString stringWithFormat:@"%@/%@.srm", s[@"folder"], key]);
+        [out addObject:@{ @"local": s[@"local"], @"remote": remote, @"name": s[@"label"] ?: romPath.lastPathComponent.stringByDeletingPathExtension }];
     }
     return out;
 }
@@ -326,7 +342,7 @@ static NSString *rf_device(void) {
     st[@"local"] = local;
     st[@"name"] = s[@"name"];
     self.state[remote] = st;
-    [self fetch:remote completion:^(NSString *sha, NSData *content, NSInteger status) {
+    [self fetch:remote knownSha:st[@"sha"] completion:^(NSString *sha, NSData *content, NSInteger status) {
         self.waitingNetwork = NO;
         void (^next)(void) = ^{ [self saveState]; [self syncSaves:saves index:i + 1 from:vc completion:completion]; };
         if (status != 200 && status != 404) {
@@ -395,6 +411,7 @@ static NSString *rf_device(void) {
     self.lastMessage = [NSString stringWithFormat:@"Downloaded the save of %@", st[@"name"]];
     self.justDownloaded = YES;
     RFAppendLog(@"cloud.txt", [@"downloaded " stringByAppendingString:remote]);
+    RFCloudDidDownload(local);   // o app desempacota os save states
 }
 
 #pragma mark Depois de salvar: envia

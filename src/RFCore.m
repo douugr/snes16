@@ -2,6 +2,7 @@
 #include "libretro.h"
 #include "rf_patch.h"
 #include "rc_consoles.h"
+#include <zlib.h>
 #import <QuartzCore/QuartzCore.h>
 
 volatile uint32_t rf_touch_mask = 0;
@@ -146,7 +147,75 @@ uint32_t RFConsoleForPath(NSString *path) {
 // Save do cartucho (SRAM) e a pasta dele no repositório da nuvem
 NSArray *RFCloudSaveFiles(NSString *romPath) {
     NSString *local = [RFDir(@"saves") stringByAppendingPathComponent:[romPath.lastPathComponent.stringByDeletingPathExtension stringByAppendingPathExtension:@"srm"]];
-    return @[ @{ @"local": local, @"folder": @"snes" } ];
+    NSMutableArray *files = [@[ @{ @"local": local, @"folder": @"snes" } ] mutableCopy];
+    // Save states dos slots 1 a 3 (o automático fica só neste aparelho): o mesmo pacote .rfst do Switch.
+    // O Switch grava os states no layout do iPad (ver o patch do Snes9x 2005 no SNES16 do Switch)
+    NSString *game = romPath.lastPathComponent.stringByDeletingPathExtension;
+    for (int slot = 1; slot <= 3; slot++) {
+        NSString *st = [RFDir(@"states") stringByAppendingPathComponent:[NSString stringWithFormat:@"%@.state%d.rfst", game, slot]];
+        [files addObject:@{ @"local": st, @"folder": @"snes", @"suffix": [NSString stringWithFormat:@".state%d.rfst", slot],
+                            @"label": [NSString stringWithFormat:@"save state slot %d", slot] }];
+    }
+    return files;
+}
+
+#pragma mark Pacote de save state para a nuvem (.rfst, o mesmo formato do Switch)
+// "RFSZ" + tamanho original (u32) + zlib de: "RFST" + versão (u32 = 1) + n (u32) + n seções (etiqueta de 4 letras,
+// tamanho u32, dados). STAT = state, RAPG = progresso das conquistas, THMB = miniatura (só o Switch grava; aqui é ignorada)
+
+static void rf_put32(NSMutableData *d, uint32_t v) {
+    uint8_t b[4] = { v & 255, (v >> 8) & 255, (v >> 16) & 255, (v >> 24) & 255 };
+    [d appendBytes:b length:4];
+}
+
+static uint32_t rf_get32(const uint8_t *p) { return p[0] | (p[1] << 8) | (p[2] << 16) | ((uint32_t)p[3] << 24); }
+
+static NSData *rf_bundle(NSData *state, NSData *progress) {
+    NSMutableData *raw = [NSMutableData dataWithBytes:"RFST" length:4];
+    rf_put32(raw, 1);
+    rf_put32(raw, progress.length ? 2 : 1);
+    [raw appendBytes:"STAT" length:4]; rf_put32(raw, (uint32_t)state.length); [raw appendData:state];
+    if (progress.length) { [raw appendBytes:"RAPG" length:4]; rf_put32(raw, (uint32_t)progress.length); [raw appendData:progress]; }
+    uLongf zlen = compressBound(raw.length);
+    NSMutableData *out = [NSMutableData dataWithBytes:"RFSZ" length:4];
+    rf_put32(out, (uint32_t)raw.length);
+    [out increaseLengthBy:zlen];
+    if (compress2((Bytef *)out.mutableBytes + 8, &zlen, raw.bytes, raw.length, 6) != Z_OK) return nil;
+    out.length = 8 + zlen;
+    return out;
+}
+
+// Um pacote chegou da nuvem: vira os arquivos do slot (.stateN e .stateN.ra)
+void RFCloudDidDownload(NSString *localPath) {
+    if (![localPath.pathExtension isEqualToString:@"rfst"]) return;
+    NSData *z = [NSData dataWithContentsOfFile:localPath];
+    const uint8_t *zp = z.bytes;
+    if (z.length < 8 || memcmp(zp, "RFSZ", 4)) return;
+    uLongf len = rf_get32(zp + 4);
+    NSMutableData *raw = [NSMutableData dataWithLength:len];
+    if (uncompress(raw.mutableBytes, &len, zp + 8, z.length - 8) != Z_OK || len < 12 || memcmp(raw.bytes, "RFST", 4)) {
+        RFAppendLog(@"cloud.txt", [@"damaged state package " stringByAppendingString:localPath.lastPathComponent]);
+        return;
+    }
+    const uint8_t *p = raw.bytes;
+    uint32_t n = rf_get32(p + 8);
+    size_t at = 12;
+    NSData *state = nil, *progress = nil;
+    for (uint32_t i = 0; i < n && at + 8 <= len; i++) {
+        uint32_t sz = rf_get32(p + at + 4);
+        if (at + 8 + sz > len) break;
+        NSData *d = [NSData dataWithBytes:p + at + 8 length:sz];
+        if (!memcmp(p + at, "STAT", 4)) state = d;
+        else if (!memcmp(p + at, "RAPG", 4)) progress = d;
+        at += 8 + sz;
+    }
+    if (!state.length) return;
+    NSString *base = localPath.stringByDeletingPathExtension;   // .../jogo.state1
+    [state writeToFile:base atomically:YES];
+    NSString *ra = [base stringByAppendingString:@".ra"];
+    if (progress.length) [progress writeToFile:ra atomically:YES];
+    else [[NSFileManager defaultManager] removeItemAtPath:ra error:nil];
+    RFAppendLog(@"cloud.txt", [@"unpacked " stringByAppendingString:localPath.lastPathComponent]);
 }
 
 // ROMs da biblioteca (as mesmas da lista de jogos)
@@ -396,7 +465,16 @@ static size_t rf_ahead_size = 0;
     NSData *progress = [[RFAchievements shared] progress];
     if (progress) [progress writeToFile:raPath atomically:YES];
     else [[NSFileManager defaultManager] removeItemAtPath:raPath error:nil];
-    return [data writeToFile:[self statePath:slot] atomically:YES];
+    BOOL ok = [data writeToFile:[self statePath:slot] atomically:YES];
+    if (ok && slot >= 1) {
+        // Pacote para a nuvem, comprimido fora da thread principal (o A5X leva um instante); sobe ao sair do jogo
+        NSString *bundlePath = [[self statePath:slot] stringByAppendingString:@".rfst"];
+        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_LOW, 0), ^{
+            NSData *b = rf_bundle(data, progress);
+            if (b && [b writeToFile:bundlePath atomically:YES]) [[RFCloud shared] localSaveWritten:bundlePath];
+        });
+    }
+    return ok;
 }
 
 - (BOOL)loadStateSlot:(int)slot {

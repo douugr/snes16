@@ -109,7 +109,7 @@ echo "==> Compilando o app (armv7, iOS 8.0)"
     src/*.m src/*.c "$CORE_LIB" "$RC_LIB" -o "$OUT/$APP" \
     -L vendor -lBTstackLink \
     -framework Foundation -framework UIKit -framework CoreGraphics -framework QuartzCore \
-    -framework GLKit -framework OpenGLES -framework AudioToolbox -framework AVFoundation -framework CoreImage -framework Security
+    -framework GLKit -framework OpenGLES -framework AudioToolbox -framework AVFoundation -framework CoreImage -framework Security -lz
 
 cp Info.plist "$OUT/"
 cp resources/*.png resources/*.html "$OUT/"
