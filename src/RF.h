@@ -221,6 +221,39 @@ uint32_t RFConsoleForPath(NSString *path);
 - (void)showItem:(NSUInteger)index;
 @end
 
+// Saves na nuvem (RFCloud.m): repositório privado do GitHub, comum aos três emuladores
+extern NSString *const RFCloudChanged;
+@interface RFCloud : NSObject
++ (instancetype)shared;
+@property (nonatomic, readonly) BOOL configured;
+@property (nonatomic, readonly, copy) NSString *repo;
+@property (nonatomic, readonly) NSUInteger pendingCount;
+@property (nonatomic, readonly, copy) NSString *lastMessage;
+@property (nonatomic, readonly, strong) NSDate *lastSync;
+@property (nonatomic, assign) BOOL justDownloaded;   // o último jogo aberto recebeu um save da nuvem
+- (NSString *)configureRepo:(NSString *)repo token:(NSString *)token;   // nil = ok; senão o erro (thread de fundo)
+- (void)disconnect;
+// Antes de abrir o jogo: baixa o save mais novo (ou pergunta, se mudou dos dois lados)
+- (void)syncBeforePlaying:(NSString *)romPath from:(UIViewController *)vc completion:(void (^)(void))completion;
+- (void)localSaveWritten:(NSString *)localPath;   // o app gravou um save: envia em seguida
+- (void)pushPending;
+@property (nonatomic, assign) BOOL gameRunning;   // com jogo aberto os envios esperam (rede x Bluetooth/som no iPad 3)
+- (void)uploadAllWithCompletion:(void (^)(NSUInteger found))completion;   // todos os saves da biblioteca
+@end
+
+// Jogos da biblioteca (caminhos completos), para enviar todos os saves (RFCore.m de cada app)
+NSArray *RFCloudLibraryGames(void);
+// Diagnóstico da saída do jogo: etapa no log e vigia de 10 s
+void RFQuitStep(const char *step);
+void RFQuitWatch(BOOL on);
+
+@interface RFCloudViewController : UIViewController
+@end
+
+// Arquivos de save de um jogo (RFCore.m de cada app): NSDictionary local + folder (pasta no repositório)
+// ou local + shared (caminho fixo no repositório, para o memory card compartilhado do PSX32)
+NSArray *RFCloudSaveFiles(NSString *romPath);
+
 // Tema visual (RFTheme.m): grade cinza sobre preto, cromado, vermelho e faixas diagonais
 UIColor *RFThemeRed(void);
 UIColor *RFThemeLilac(void);

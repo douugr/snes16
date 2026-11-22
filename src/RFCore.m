@@ -143,6 +143,22 @@ uint32_t RFConsoleForPath(NSString *path) {
     return RC_CONSOLE_SUPER_NINTENDO;
 }
 
+// Save do cartucho (SRAM) e a pasta dele no repositório da nuvem
+NSArray *RFCloudSaveFiles(NSString *romPath) {
+    NSString *local = [RFDir(@"saves") stringByAppendingPathComponent:[romPath.lastPathComponent.stringByDeletingPathExtension stringByAppendingPathExtension:@"srm"]];
+    return @[ @{ @"local": local, @"folder": @"snes" } ];
+}
+
+// ROMs da biblioteca (as mesmas da lista de jogos)
+NSArray *RFCloudLibraryGames(void) {
+    NSString *dir = RFDir(@"roms");
+    NSMutableArray *out = [NSMutableArray array];
+    for (NSString *f in [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:nil]) {
+        if ([@[@"sfc", @"smc", @"swc", @"fig", @"gd3", @"gd7", @"dx2", @"bsx"] containsObject:f.pathExtension.lowercaseString]) [out addObject:[dir stringByAppendingPathComponent:f]];
+    }
+    return out;
+}
+
 NSArray *RFAchievementsConsoles(void) {
     return @[ @{ @"id": @(RC_CONSOLE_SUPER_NINTENDO), @"name": @"SNES" } ];
 }
@@ -353,14 +369,18 @@ static size_t rf_ahead_size = 0;
     for (size_t i = 0; i < size; i++) {
         if (p[i] != 0 && p[i] != 0xFF) { any = YES; break; }
     }
-    if (any) [[NSData dataWithBytes:mem length:size] writeToFile:[self sramPath] atomically:YES];
+    if (any && [[NSData dataWithBytes:mem length:size] writeToFile:[self sramPath] atomically:YES]) [[RFCloud shared] localSaveWritten:[self sramPath]];
 }
 
 - (void)unload {
     if (!self.loaded) return;
+    RFQuitStep("sram");
     [self saveSRAM];
+    RFQuitStep("achievements unload");
     [[RFAchievements shared] gameUnloaded];
+    RFQuitStep("core unload");
     retro_unload_game();
+    RFQuitStep("core unloaded");
     self.loaded = NO;
     rf_frame_data = NULL;
 }

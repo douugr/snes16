@@ -4,3 +4,4 @@ core/
 vendor/libBTstack*.dylib*
 .DS_Store
 build-ra/
+diag/

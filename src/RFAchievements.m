@@ -240,6 +240,7 @@ static void rf_login_done(int result, const char *error_message, rc_client_t *cl
 
 - (void)gameLoadedAtPath:(NSString *)path console:(uint32_t)console patched:(BOOL)patched {
     [self gameUnloaded];
+    [RFCloud shared].gameRunning = YES;
     rc_libretro_memory_init(&rf_regions, rf_mmap.num_descriptors ? &rf_mmap : NULL, rf_core_memory_info, console);
     self.memoryReady = YES;
     self.pendingPath = path;
@@ -297,6 +298,7 @@ static void rf_game_loaded(int result, const char *error_message, rc_client_t *c
 }
 
 - (void)gameUnloaded {
+    if ([RFCloud shared].gameRunning) [RFCloud shared].gameRunning = NO;
     [self.idleTimer invalidate];
     self.idleTimer = nil;
     if (rc_client_is_game_loaded(rf_client)) rc_client_unload_game(rf_client);

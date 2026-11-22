@@ -30,6 +30,19 @@
 @property (nonatomic, assign) DNSServiceRef dnsRef;
 @end
 
+// Corpo pequeno (JSON) de um POST: o que já veio junto com o cabeçalho + o resto
+static NSData *rf_read_body(int fd, const char *initial, size_t initialLen, unsigned long long length) {
+    if (length > 16384) return nil;
+    NSMutableData *d = [NSMutableData dataWithBytes:initial length:MIN(initialLen, (size_t)length)];
+    while (d.length < length) {
+        char b[4096];
+        ssize_t n = recv(fd, b, MIN(sizeof(b), (size_t)(length - d.length)), 0);
+        if (n <= 0) break;
+        [d appendBytes:b length:(size_t)n];
+    }
+    return d.length == length ? d : nil;
+}
+
 @implementation RFWebServer
 
 + (instancetype)shared {
@@ -328,6 +341,17 @@ static void rf_respond_error(int fd, int status, NSString *message) {
         } else {
             rf_respond_error(fd, 404, @"file not found");
         }
+    } else if ([method isEqualToString:@"GET"] && [path isEqualToString:@"/api/cloud"]) {
+        RFCloud *cloud = [RFCloud shared];
+        rf_respond_json(fd, 200, @{@"ok": @YES, @"configured": @(cloud.configured), @"repo": cloud.repo ?: @""});
+    } else if ([method isEqualToString:@"POST"] && [path isEqualToString:@"/api/cloud"]) {
+        // Configuração dos saves na nuvem (repositório + token), digitada no navegador do computador
+        NSData *body = rf_read_body(fd, buf + headerLen, used - headerLen, contentLength);
+        NSDictionary *j = body ? [NSJSONSerialization JSONObjectWithData:body options:0 error:nil] : nil;
+        NSString *err = [j isKindOfClass:[NSDictionary class]] && [j[@"repo"] isKindOfClass:[NSString class]] && [j[@"token"] isKindOfClass:[NSString class]]
+            ? [[RFCloud shared] configureRepo:j[@"repo"] token:j[@"token"]] : @"invalid request";
+        if (err) rf_respond_json(fd, 200, @{@"ok": @NO, @"error": err});
+        else rf_respond_json(fd, 200, @{@"ok": @YES, @"repo": [RFCloud shared].repo ?: @""});
     } else {
         rf_respond_error(fd, 404, @"not found");
     }

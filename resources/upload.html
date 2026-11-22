@@ -44,6 +44,9 @@
   .empty { color:var(--dim); padding:12px 4px; }
   .tip { margin-top:28px; padding:14px 16px; background:var(--card); border-left:4px solid var(--accent); border-radius:8px; color:var(--dim); font-size:14px; }
   .tip b { color:var(--text); }
+  #cloud input { width:100%; margin:6px 0; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--card); color:var(--text); font:inherit; }
+  #cloud form button { margin-top:6px; padding:6px 16px; color:var(--text); border-color:var(--accent); }
+  #cloud ol { padding-left:20px; }
 </style>
 </head>
 <body>
@@ -66,6 +69,24 @@
   <div class="tip">
     <b>Automatic patching:</b> give the patch the same name as the ROM (e.g. <i>My Game.sfc</i> + <i>My Game.bps</i>).
     SNES16 applies the patch when the game starts, without changing the original ROM.
+  </div>
+  <h2>Cloud saves</h2>
+  <div class="tip" id="cloud">
+    <p id="cloudStatus">Checking…</p>
+    <p>Keep game saves (cartridge saves and memory cards) in a <b>private GitHub repository</b> and continue on another device.
+       The setup is shared by MD16, SNES16 and PSX32 on this iPad.</p>
+    <ol>
+      <li>Create a <b>private</b> repository on GitHub (e.g. <i>retro-saves</i>).</li>
+      <li>Create a <b>fine-grained token</b> (GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens):
+          <i>Repository access</i>: only that repository; <i>Permissions</i>: <b>Contents: Read and write</b>.</li>
+      <li>Paste both below. The token is sent only to the iPad and stays there.</li>
+    </ol>
+    <form id="cloudForm" autocomplete="off">
+      <input id="cloudRepo" placeholder="owner/repository" spellcheck="false">
+      <input id="cloudToken" type="password" placeholder="github_pat_…" spellcheck="false">
+      <button type="submit">Connect</button>
+    </form>
+    <p id="cloudMsg"></p>
   </div>
 </main>
 <script>
@@ -142,6 +163,27 @@ pick.onchange = () => { sendAll([...pick.files]); pick.value = ""; };
 drop.addEventListener("drop", e => sendAll([...e.dataTransfer.files]));
 document.addEventListener("dragover", e => e.preventDefault());
 document.addEventListener("drop", e => e.preventDefault());
+async function cloudRefresh() {
+  try {
+    const r = await (await fetch("api/cloud", {cache: "no-store"})).json();
+    document.getElementById("cloudStatus").innerHTML = r.configured ? "<b>Connected to " + esc(r.repo) + ".</b> To change it, connect again below."
+                                                                    : "<b>Not set up yet.</b>";
+    if (r.repo) document.getElementById("cloudRepo").value = r.repo;
+  } catch (e) {}
+}
+document.getElementById("cloudForm").onsubmit = async e => {
+  e.preventDefault();
+  const msg = document.getElementById("cloudMsg");
+  msg.textContent = "Checking access to the repository…";
+  try {
+    const r = await (await fetch("api/cloud", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({repo: document.getElementById("cloudRepo").value, token: document.getElementById("cloudToken").value})})).json();
+    msg.textContent = r.ok ? "Connected! Saves will sync when games open and after they save." : r.error;
+    if (r.ok) document.getElementById("cloudToken").value = "";
+  } catch (err) { msg.textContent = "No connection to the iPad."; }
+  cloudRefresh();
+};
+cloudRefresh();
 refresh();
 </script>
 </body>

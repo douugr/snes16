@@ -118,7 +118,11 @@ typedef struct {
     self.link = [CADisplayLink displayLinkWithTarget:self selector:@selector(tick)];
     [self.link addToRunLoop:[NSRunLoop mainRunLoop] forMode:NSRunLoopCommonModes];
     if ([RFCore shared].patched) [self showToast:@"Patch applied"];
-    if ([[RFCore shared] hasStateSlot:0]) [self offerResume];
+    if ([RFCloud shared].justDownloaded) {
+        // Chegou um save mais novo da nuvem: o salvamento automático daqui voltaria ao ponto antigo
+        [RFCloud shared].justDownloaded = NO;
+        [self showToast:@"Save from the cloud loaded"];
+    } else if ([[RFCore shared] hasStateSlot:0]) [self offerResume];
 }
 
 // Há um salvamento automático da última sessão: pergunta se quer continuar dele
@@ -467,14 +471,19 @@ typedef struct {
 }
 
 - (void)quit {
+    RFQuitWatch(YES);
     [self.link invalidate];
     self.link = nil;
     [RFBluetooth shared].menuPressed = nil;
+    RFQuitStep("audio stop");
     [[RFAudio shared] stop];
+    RFQuitStep("save state");
     [[RFCore shared] saveStateSlot:0];   // salvamento automático ao sair
+    RFQuitStep("unload");
     [[RFCore shared] unload];
     rf_touch_mask = 0;
-    [self dismissViewControllerAnimated:YES completion:nil];
+    RFQuitStep("dismiss");
+    [self dismissViewControllerAnimated:YES completion:^{ RFQuitStep("done"); RFQuitWatch(NO); }];
 }
 
 @end
@@ -1115,8 +1124,13 @@ static CGRect rf_label_rect(CGRect b) {
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     NSString *path = [RFDir(@"roms") stringByAppendingPathComponent:self.roms[indexPath.row]];
-    RFGameViewController *game = [[RFGameViewController alloc] initWithPath:path];
-    [self presentViewController:game animated:YES completion:nil];
+    // Saves na nuvem: baixa o mais novo antes de o jogo ler o save do disco
+    tableView.userInteractionEnabled = NO;
+    [[RFCloud shared] syncBeforePlaying:path from:self.navigationController ?: self completion:^{
+        tableView.userInteractionEnabled = YES;
+        RFGameViewController *game = [[RFGameViewController alloc] initWithPath:path];
+        [self presentViewController:game animated:YES completion:nil];
+    }];
 }
 
 @end
@@ -1136,6 +1150,8 @@ static CGRect rf_label_rect(CGRect b) {
            @"make": ^UIViewController *{ return [[RFLibraryViewController alloc] initWithStyle:UITableViewStylePlain]; } },
         @{ @"title": @"Achievements", @"caption": @"RetroAchievements: your games and unlocks", @"keep": @YES,
            @"make": ^UIViewController *{ return [[RFAchievementsHomeViewController alloc] init]; } },
+        @{ @"title": @"Cloud saves", @"caption": @"Your saves in a private GitHub repository", @"keep": @YES,
+           @"make": ^UIViewController *{ return [[RFCloudViewController alloc] init]; } },
         @{ @"title": @"Upload ROMs", @"caption": @"Send games from a computer or phone", @"keep": @NO,
            @"make": ^UIViewController *{ return [[RFUploadViewController alloc] init]; } },
         @{ @"title": @"Controller", @"caption": @"Bluetooth controller and buttons", @"keep": @YES,
